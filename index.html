@@ -19,6 +19,9 @@
      2) 标签排版引擎（.a4page / .grid / .cell / @media print）
         —— 第 2 部分的尺寸单位与 CSS 变量由下方「应用逻辑」直接控制，
            修改会影响实际出纸效果，请谨慎调整。
+
+   布局约定：侧栏用 block 流 + <details> 折叠，不用 flex 列。
+   flex 列会让子项默认 flex-shrink:1 被压扁，配合 overflow 就会裁掉控件。
    ===================================================================== */
 
 /* ---------------------------------------------------------------- 设计变量 */
@@ -43,13 +46,15 @@
   --shadow-1: 0 1px 2px rgba(16,24,40,.06);
   --shadow-2: 0 6px 20px rgba(16,24,40,.09);
   --shadow-3: 0 12px 40px rgba(16,24,40,.18);
+  --topbar-sh: 0 1px 0 var(--border), 0 4px 14px rgba(16,24,40,.06);
   --r-s: 8px;
   --r-m: 11px;
-  --topbar-h: 54px;
-  --sidebar-w: 340px;
+  --topbar-h: 62px;
+  --sidebar-w: 344px;
 
   /* ↓↓↓ 排版引擎变量，由应用逻辑写入，请勿改名 ↓↓↓ */
-  --qr: 30mm;
+  --symw: 30mm;     /* 码图宽（二维码/DataMatrix 为正方，Code128 为长条） */
+  --symh: 30mm;     /* 码图高 */
   --fs: 3mm;
   --fs2: 2.4mm;
   --gap: 1.5mm;
@@ -67,6 +72,7 @@
     --ok:#4ade80; --warn:#fbbf24; --err:#fb7185;
     --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 6px 22px rgba(0,0,0,.45);
     --shadow-3:0 12px 44px rgba(0,0,0,.6);
+    --topbar-sh: 0 1px 0 var(--border), 0 6px 18px rgba(0,0,0,.5);
   }
 }
 :root[data-theme="dark"]{
@@ -78,6 +84,7 @@
   --ok:#4ade80; --warn:#fbbf24; --err:#fb7185;
   --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 6px 22px rgba(0,0,0,.45);
   --shadow-3:0 12px 44px rgba(0,0,0,.6);
+  --topbar-sh: 0 1px 0 var(--border), 0 6px 18px rgba(0,0,0,.5);
 }
 :root[data-theme="light"]{
   --bg:#eceff4; --surface:#ffffff; --surface-2:#f6f8fb; --surface-3:#eef1f6;
@@ -88,6 +95,7 @@
   --ok:#0d7a3d; --warn:#a45408; --err:#c33a22;
   --shadow-1:0 1px 2px rgba(16,24,40,.06); --shadow-2:0 6px 20px rgba(16,24,40,.09);
   --shadow-3:0 12px 40px rgba(16,24,40,.18);
+  --topbar-sh: 0 1px 0 var(--border), 0 4px 14px rgba(16,24,40,.06);
 }
 
 /* ------------------------------------------------------------------ 基础 */
@@ -105,6 +113,7 @@ body{
 .app{ display:flex; flex-direction:column; height:100dvh; }
 .hide{ display:none !important; }
 .only-mobile{ display:none !important; }
+.only-desktop{ display:inline-flex; }
 button{ font:inherit; }
 code{
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:.92em;
@@ -114,24 +123,33 @@ code{
 /* ---------------------------------------------------------------- 顶栏 */
 .topbar{
   flex:0 0 auto; display:flex; align-items:center; gap:10px;
-  height:var(--topbar-h); padding:0 14px; background:var(--surface);
-  border-bottom:1px solid var(--border); box-shadow:var(--shadow-1); z-index:40;
+  height:var(--topbar-h); padding:0 16px; z-index:40;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 5%, var(--surface)) 0%,
+      var(--surface) 62%);
+  box-shadow:var(--topbar-sh);
 }
-.brand{ display:flex; align-items:center; gap:10px; min-width:0; }
+.brand{ display:flex; align-items:center; gap:12px; min-width:0; }
 .brand .mark{
-  width:32px; height:32px; flex:0 0 auto; border-radius:9px;
-  background:var(--accent); color:var(--accent-ink);
-  display:grid; place-items:center;
+  width:40px; height:40px; flex:0 0 auto; border-radius:12px;
+  background:linear-gradient(145deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 72%, #7c3aed) 100%);
+  color:var(--accent-ink); display:grid; place-items:center;
+  box-shadow:0 3px 10px color-mix(in srgb, var(--accent) 38%, transparent),
+             inset 0 1px 0 rgba(255,255,255,.28);
 }
-.brand .mark svg{ width:19px; height:19px; display:block; }
-.brand h1{ margin:0; font-size:15px; font-weight:650; letter-spacing:.2px; white-space:nowrap; }
-.brand p{ margin:1px 0 0; font-size:11.5px; color:var(--text-3); white-space:nowrap; }
+.brand .mark svg{ width:23px; height:23px; display:block; }
+.brand h1{
+  margin:0; font-size:17.5px; font-weight:700; letter-spacing:-.2px;
+  white-space:nowrap; line-height:1.15;
+}
+.brand p{ margin:2px 0 0; font-size:11.5px; color:var(--text-3); white-space:nowrap; }
 .brand .names{ min-width:0; overflow:hidden; }
 .topbar .spacer{ flex:1 1 auto; }
 
 .pill{
-  display:inline-flex; align-items:center; gap:6px; max-width:34vw;
-  padding:5px 11px; border-radius:999px; font-size:12px; font-weight:550;
+  display:inline-flex; align-items:center; gap:6px; max-width:32vw;
+  padding:6px 12px; border-radius:999px; font-size:12px; font-weight:550;
   background:var(--surface-3); color:var(--text-2); border:1px solid var(--border);
   overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
 }
@@ -154,6 +172,9 @@ code{
 .btn:hover{ background:var(--accent-hover); }
 .btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 .btn svg{ width:15px; height:15px; flex:0 0 auto; }
+.btn.lg{ padding:10px 20px; font-size:13.5px; box-shadow:0 2px 8px color-mix(in srgb, var(--accent) 34%, transparent); }
+.btn.lg svg{ width:16px; height:16px; }
+.btn.sm{ padding:6px 12px; font-size:12px; }
 .btn.ghost{ background:transparent; color:var(--text-2); border-color:var(--border-strong); }
 .btn.ghost:hover{ background:var(--surface-3); color:var(--text); }
 .btn.icon{ padding:0; width:34px; height:34px; flex:0 0 auto; }
@@ -163,46 +184,94 @@ code{
 .btn[disabled]:hover{ background:var(--accent); }
 .btn.ghost[disabled]:hover{ background:transparent; }
 
+.linkbtn{
+  background:none; border:none; padding:2px 4px; cursor:pointer; border-radius:5px;
+  font-size:11.5px; font-weight:600; color:var(--accent);
+}
+.linkbtn:hover{ background:var(--accent-soft); }
+
 /* ---------------------------------------------------------------- 主体 */
 .shell{
   flex:1 1 auto; min-height:0;
   display:grid; grid-template-columns:var(--sidebar-w) minmax(0,1fr);
 }
-/* 遮罩只在移动端抽屉打开时存在，桌面宽度下永远不显示 */
 .scrim{ display:none; }
 
+/* 左右折叠：侧栏收起，预览占满整宽 */
+.app.is-rail .shell{ grid-template-columns:minmax(0,1fr); }
+.app.is-rail .sidebar{ display:none; }
+.rail-only{ display:none !important; }
+.app.is-rail .rail-only{ display:inline-flex !important; }
+
 /* ---------------------------------------------------------------- 侧栏 */
-/* 关键：用 block 流而不是 flex 列，避免子项被 flex-shrink 压扁后裁切内容 */
 .sidebar{
   min-height:0; overflow-y:auto; overscroll-behavior:contain;
   background:var(--surface); border-right:1px solid var(--border);
-  padding:12px 14px 28px;
+  padding:10px 14px 28px;
   display:block;
 }
-.sect{ margin:0 0 6px; }
-.sect + .sect{ border-top:1px solid var(--border); padding-top:12px; }
-.sect-hd{
-  display:flex; align-items:center; gap:8px; margin:0 0 10px;
-  font-size:12.5px; font-weight:650; color:var(--text); letter-spacing:.2px;
+.side-top{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:2px 2px 8px;
 }
+.side-title{ font-size:11px; font-weight:700; letter-spacing:.8px; color:var(--text-3); text-transform:uppercase; }
+
+/* 上下折叠：每个分节都是 <details>，不设 overflow，内容永远不会被裁 */
+.sect{ margin:0; border-top:1px solid var(--border); }
+.sect:first-of-type{ border-top:none; }
+.sect-hd{
+  display:flex; align-items:center; gap:8px; padding:11px 2px;
+  font-size:12.5px; font-weight:650; color:var(--text); letter-spacing:.2px;
+  cursor:pointer; user-select:none; list-style:none;
+}
+.sect-hd::-webkit-details-marker{ display:none; }
+.sect-hd::after{
+  content:""; margin-left:auto; width:7px; height:7px; flex:0 0 auto;
+  border-right:1.7px solid var(--text-3); border-bottom:1.7px solid var(--text-3);
+  transform:rotate(45deg) translate(-2px,-2px); transition:transform .18s ease;
+}
+.sect[open] > .sect-hd::after{ transform:rotate(-135deg) translate(-2px,-2px); }
+.sect-hd:hover{ color:var(--accent); }
+.sect-hd:hover::after{ border-color:var(--accent); }
 .step{
   width:19px; height:19px; flex:0 0 auto; border-radius:6px;
   background:var(--accent-soft); color:var(--accent);
   font-size:11px; font-weight:700; display:grid; place-items:center;
 }
-.sect-bd{ display:flex; flex-direction:column; gap:11px; }
+.sect-bd{ display:flex; flex-direction:column; gap:11px; padding:0 2px 14px; }
 .sect-bd > *{ flex:0 0 auto; }
 
 .field{ display:flex; flex-direction:column; gap:5px; min-width:0; }
 .field > label,
 .field-label{ font-size:11.5px; font-weight:600; color:var(--text-2); }
+.field-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .field-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.grow{ flex:1 1 118px; min-width:0; }
+.grow{ flex:1 1 116px; min-width:0; }
 .hint{ font-size:11px; color:var(--text-3); line-height:1.6; margin:0; }
 .hint.err{ color:var(--err); }
+.hint.warn{ color:var(--warn); }
 .hint:empty{ display:none; }
 .sep{ color:var(--text-3); flex:0 0 auto; }
 .unit{ font-size:11.5px; color:var(--text-3); flex:0 0 auto; }
+
+/* 筛选条件块 */
+.cond{
+  display:flex; flex-direction:column; gap:7px;
+  border:1px solid var(--border); border-radius:var(--r-m);
+  background:var(--surface-2); padding:9px 10px 10px;
+}
+.cond.is-off{ opacity:.72; }
+.cond-hd{
+  display:flex; align-items:center; gap:7px;
+  font-size:11.5px; font-weight:650; color:var(--text-2);
+}
+.cond-tag{
+  font-size:10px; font-weight:700; letter-spacing:.4px;
+  padding:2px 6px; border-radius:5px;
+  background:var(--accent-soft); color:var(--accent);
+}
+.op{ flex:0 0 62px; text-align:center; }
+.numin{ flex:1 1 78px; min-width:0; }
 
 select,
 input[type=number],
@@ -220,6 +289,7 @@ select{
   background-position:calc(100% - 14px) 53%, calc(100% - 9px) 53%;
   background-size:5px 5px, 5px 5px; background-repeat:no-repeat;
 }
+select.op{ padding-right:9px; background-image:none; }
 textarea{ resize:vertical; min-height:44px; line-height:1.45; }
 select:focus, input:focus, textarea:focus{
   outline:none; border-color:var(--accent);
@@ -253,24 +323,26 @@ select:disabled, input:disabled, textarea:disabled{
 /* --------------------------------------------------------- 复选胶囊 */
 .chips{ display:flex; flex-wrap:wrap; gap:6px; }
 .chips-in{ display:contents; }
+/* 字段很多时默认只露前几个，其余折叠（勾选中的永远显示） */
+.chips.is-clipped .chip.extra{ display:none; }
 .chip{
   display:inline-flex; align-items:center; gap:5px;
   padding:5px 10px 5px 8px; border-radius:999px;
   background:var(--surface); border:1px solid var(--border-strong);
-  font-size:12px; color:var(--text-2); cursor:pointer; max-width:100%;
+  font-size:12px; color:var(--text-2); cursor:pointer;
+  max-width:100%; overflow-wrap:anywhere;
   transition:background .14s, border-color .14s, color .14s;
 }
-.chip > span,
-.chip{ overflow-wrap:anywhere; }
 .chip:hover{ border-color:var(--accent-border); }
 .chip input{ accent-color:var(--accent); margin:0; width:14px; height:14px; flex:0 0 auto; cursor:pointer; }
 .chip:has(input:checked){
   background:var(--accent-soft); border-color:var(--accent-border);
   color:var(--accent); font-weight:600;
 }
+.chip:has(input:disabled){ opacity:.45; cursor:not-allowed; }
 .chip.locked{
   background:var(--accent-soft); border-color:var(--accent-border);
-  color:var(--accent); font-weight:650; cursor:default;
+  color:var(--accent); font-weight:650; cursor:default; opacity:1;
 }
 .chip.locked .tick{ width:13px; height:13px; flex:0 0 auto; }
 .chip .sub{ font-size:10.5px; font-weight:500; opacity:.72; }
@@ -347,16 +419,21 @@ select:disabled, input:disabled, textarea:disabled{
    移动端：侧栏改为抽屉，顶栏精简，预览默认适应宽度
    ===================================================================== */
 @media screen and (max-width:900px){
-  :root{ --topbar-h:52px; }
+  :root{ --topbar-h:56px; }
   .only-mobile{ display:inline-flex !important; }
+  .only-desktop{ display:none !important; }
   .brand p{ display:none; }
-  .brand .mark{ width:30px; height:30px; }
-  .pill{ max-width:28vw; font-size:11px; padding:4px 9px; }
+  .brand .mark{ width:34px; height:34px; border-radius:10px; }
+  .brand .mark svg{ width:20px; height:20px; }
+  .brand h1{ font-size:16px; }
+  .pill{ max-width:30vw; font-size:11px; padding:5px 10px; }
 
   .shell{ grid-template-columns:minmax(0,1fr); position:relative; }
+  .app.is-rail .shell{ grid-template-columns:minmax(0,1fr); }
+  .app.is-rail .sidebar{ display:block; }
   .sidebar{
     position:fixed; z-index:30;
-    top:var(--topbar-h); left:0; bottom:0; width:min(340px, 88vw);
+    top:var(--topbar-h); left:0; bottom:0; width:min(344px, 90vw);
     border-right:1px solid var(--border); box-shadow:var(--shadow-3);
     transform:translateX(-101%); transition:transform .22s ease;
     padding-bottom:calc(28px + env(safe-area-inset-bottom));
@@ -371,17 +448,17 @@ select:disabled, input:disabled, textarea:disabled{
 
 @media screen and (max-width:520px){
   .btn{ padding:9px 13px; }
+  .btn.lg{ padding:9px 13px; }
   .btn .btn-tx{ display:none; }
   .btn.icon{ width:36px; height:36px; }
   .topbar{ gap:8px; padding:0 10px; }
-  .brand h1{ font-size:14px; }
-  .pill{ max-width:30vw; }
+  .pill{ max-width:32vw; }
   .canvas-bar{ padding:6px 8px; font-size:11px; }
   #stage{ padding:10px 6px 32px; }
-  .stats .stat .v{ font-size:15px; }
-  /* 触控目标放大 */
+  /* 触控目标放大；16px 可避免 iOS 聚焦时自动放大页面 */
   select, input[type=number], input[type=text], textarea{ font-size:16px; padding:9px 10px; }
   select{ padding-right:28px; }
+  select.op{ padding-right:10px; }
   .seg label{ padding:8px 4px; font-size:12.5px; }
   .chip{ padding:7px 12px 7px 9px; font-size:12.5px; }
   .drop{ padding:20px 12px; }
@@ -402,7 +479,10 @@ select:disabled, input:disabled, textarea:disabled{
 /* 裁切线：格线只画右/下，外框补左/上，整页无重线、刀路唯一 */
 .grid.cut{ border-left:.2mm dashed #8a929b; border-top:.2mm dashed #8a929b; }
 .grid.cut .cell{ border-right:.2mm dashed #8a929b; border-bottom:.2mm dashed #8a929b; }
-.cell img{ width:var(--qr); height:var(--qr); image-rendering:pixelated; }
+/* 位图码（qrcode.js 输出 GIF）用 pixelated 保持模块边界锐利；
+   SVG 矢量码（DataMatrix / Code128）必须用 auto，否则会被当成位图重采样 */
+.cell img{ width:var(--symw); height:var(--symh); image-rendering:pixelated; }
+.cell img.vec{ image-rendering:auto; }
 .cell .txt{
   margin-top:var(--gap); text-align:center; line-height:1.15;
   width:100%; word-break:break-all;
@@ -430,7 +510,7 @@ select:disabled, input:disabled, textarea:disabled{
   html,body{ height:auto; background:#fff; color:#1a1a1a; }
   .app{ display:block; height:auto; }
   .topbar, .sidebar, .canvas-bar, .scrim, .no-print{ display:none !important; }
-  .shell{ display:block; }
+  .shell, .app.is-rail .shell{ display:block; }
   .canvas{ display:block; background:#fff; min-height:0; }
   .viewport{ overflow:visible; }
   #stage{ padding:0; zoom:1; }
@@ -454,7 +534,7 @@ select:disabled, input:disabled, textarea:disabled{
 </head>
 <body>
 
-<div class="app">
+<div class="app" id="app">
 
   <!-- ============================================================ 顶栏 -->
   <header class="topbar no-print">
@@ -479,6 +559,15 @@ select:disabled, input:disabled, textarea:disabled{
       </div>
     </div>
 
+    <button class="btn ghost icon only-desktop" id="railBtn" type="button"
+            title="折叠 / 展开设置面板" aria-label="折叠设置面板" aria-expanded="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+        <path d="M9 4v16"></path>
+      </svg>
+    </button>
+
     <span class="spacer"></span>
 
     <span id="status" class="pill"><span class="dot"></span><span id="statusText">尚未载入文件</span></span>
@@ -491,7 +580,7 @@ select:disabled, input:disabled, textarea:disabled{
       </svg>
     </button>
 
-    <button class="btn" id="printBtn" type="button">
+    <button class="btn lg" id="printBtn" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M6 9V3h12v6M6 18H4v-7h16v7h-2"></path>
@@ -508,9 +597,14 @@ select:disabled, input:disabled, textarea:disabled{
     <!-- ======================================================== 控制侧栏 -->
     <aside class="sidebar no-print" id="sidebar">
 
+      <div class="side-top">
+        <span class="side-title">设置</span>
+        <button class="linkbtn" id="foldBtn" type="button">全部收起</button>
+      </div>
+
       <!-- ① 载入文件 -->
-      <section class="sect">
-        <h2 class="sect-hd"><span class="step">1</span>载入表格</h2>
+      <details class="sect" id="sect1" open>
+        <summary class="sect-hd"><span class="step">1</span>载入表格</summary>
         <div class="sect-bd">
           <label class="drop" id="drop">
             <input type="file" id="file" accept=".xlsx,.xls,.csv">
@@ -531,15 +625,18 @@ select:disabled, input:disabled, textarea:disabled{
             二维码内容 = Key。
           </p>
         </div>
-      </section>
+      </details>
 
       <!-- ② 标签内容 -->
-      <section class="sect">
-        <h2 class="sect-hd"><span class="step">2</span>标签内容</h2>
+      <details class="sect" id="sect2" open>
+        <summary class="sect-hd"><span class="step">2</span>标签内容</summary>
         <div class="sect-bd">
           <div class="field">
-            <span class="field-label">显示字段</span>
-            <div class="chips">
+            <div class="field-head">
+              <span class="field-label">显示字段</span>
+              <button class="linkbtn hide" id="chipsToggle" type="button"></button>
+            </div>
+            <div class="chips is-clipped" id="chips">
               <span class="chip locked" title="Key 为必选字段，同时也是二维码内容">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="tick">
@@ -568,12 +665,22 @@ select:disabled, input:disabled, textarea:disabled{
           </div>
           <p class="hint" id="dcharsTip"></p>
         </div>
-      </section>
+      </details>
 
       <!-- ③ 纸张与版式 -->
-      <section class="sect">
-        <h2 class="sect-hd"><span class="step">3</span>纸张与版式</h2>
+      <details class="sect" id="sect3" open>
+        <summary class="sect-hd"><span class="step">3</span>纸张与版式</summary>
         <div class="sect-bd">
+          <div class="field">
+            <span class="field-label">码制</span>
+            <div class="seg" role="radiogroup" aria-label="码制">
+              <label><input type="radio" name="sym" value="qr" checked><span>二维码</span></label>
+              <label><input type="radio" name="sym" value="dm"><span>DataMatrix</span></label>
+              <label><input type="radio" name="sym" value="c128"><span>条形码</span></label>
+            </div>
+            <p class="hint" id="symTip"></p>
+          </div>
+
           <div class="field">
             <span class="field-label">打印模式</span>
             <div class="seg" role="radiogroup" aria-label="打印模式">
@@ -640,34 +747,61 @@ select:disabled, input:disabled, textarea:disabled{
             </div>
           </div>
         </div>
-      </section>
+      </details>
 
-      <!-- ④ 筛选 -->
-      <section class="sect">
-        <h2 class="sect-hd"><span class="step">4</span>筛选范围</h2>
+      <!-- ④ 筛选：三个通用条件，全部按「与」组合 -->
+      <details class="sect" id="sect4" open>
+        <summary class="sect-hd"><span class="step">4</span>筛选范围</summary>
         <div class="sect-bd">
-          <div class="field">
-            <label for="kw">关键字</label>
-            <textarea id="kw" rows="2" placeholder="可粘贴多个 Key，空格 / 逗号 / 换行分隔"></textarea>
+
+          <!-- 条件一：文本 -->
+          <div class="cond">
+            <div class="cond-hd"><span class="cond-tag">文本</span>关键字检索</div>
+            <div class="field">
+              <select id="tField" aria-label="文本检索字段">
+                <option value="__all__">全部字段</option>
+              </select>
+            </div>
+            <textarea id="kw" rows="2" placeholder="可粘贴多个值，空格 / 逗号 / 换行分隔"></textarea>
             <div class="seg" role="radiogroup" aria-label="匹配方式">
-              <label><input type="radio" name="kwmode" value="fuzzy" checked><span>模糊匹配</span></label>
-              <label><input type="radio" name="kwmode" value="exact"><span>Key 精确</span></label>
+              <label><input type="radio" name="kwmode" value="fuzzy" checked><span>包含</span></label>
+              <label><input type="radio" name="kwmode" value="exact"><span>完全相等</span></label>
             </div>
             <p class="hint err" id="miss"></p>
           </div>
 
-          <div class="field-row">
-            <div class="field grow hide" id="whsWrap">
-              <label for="whsFilter">仓库</label>
-              <select id="whsFilter"><option value="">全部</option></select>
-            </div>
-            <div class="field grow hide" id="stockWrap">
-              <label for="stockFilter">库存</label>
-              <select id="stockFilter">
-                <option value="all">全部</option>
-                <option value="gt0">仅 &gt; 0</option>
+          <!-- 条件二：枚举 -->
+          <div class="cond" id="enumCond">
+            <div class="cond-hd"><span class="cond-tag">枚举</span>按取值筛选</div>
+            <div class="field-row">
+              <select id="eField" class="grow" aria-label="枚举筛选字段">
+                <option value="">不启用</option>
+              </select>
+              <select id="eValue" class="grow" aria-label="枚举取值" disabled>
+                <option value="__all__">全部</option>
               </select>
             </div>
+            <p class="hint" id="enumTip"></p>
+          </div>
+
+          <!-- 条件三：数值 -->
+          <div class="cond" id="numCond">
+            <div class="cond-hd"><span class="cond-tag">数值</span>按数值比较</div>
+            <div class="field-row">
+              <select id="nField" class="grow" aria-label="数值筛选字段">
+                <option value="">不启用</option>
+              </select>
+              <select id="nOp" class="op" aria-label="比较运算符" disabled>
+                <option value="gt">&gt;</option>
+                <option value="ge">&ge;</option>
+                <option value="eq">=</option>
+                <option value="ne">&ne;</option>
+                <option value="le">&le;</option>
+                <option value="lt">&lt;</option>
+              </select>
+              <input type="number" id="nValue" class="numin" step="any" placeholder="值" aria-label="比较值" disabled>
+            </div>
+            <p class="hint" id="numTip"></p>
           </div>
 
           <div class="field">
@@ -678,8 +812,10 @@ select:disabled, input:disabled, textarea:disabled{
               <input type="number" id="to" class="grow" min="1" step="1" placeholder="止" aria-label="结束条数">
             </div>
           </div>
+
+          <button class="btn ghost block sm" id="clearFilterBtn" type="button">清空全部筛选</button>
         </div>
-      </section>
+      </details>
 
       <!-- 统计 -->
       <div class="stats">
@@ -707,6 +843,14 @@ select:disabled, input:disabled, textarea:disabled{
     <!-- ======================================================== 预览区 -->
     <section class="canvas">
       <div class="canvas-bar no-print">
+        <button class="btn ghost icon only-desktop rail-only" id="railOpenBtn" type="button"
+                title="展开设置面板" aria-label="展开设置面板">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+            <path d="M9 4v16"></path>
+          </svg>
+        </button>
         <span id="count" class="count">尚无预览内容</span>
         <span class="spacer"></span>
         <div class="zoom">
@@ -3057,15 +3201,364 @@ var qrcode = function() {
 }));
 </script>
 
+<!-- ===== 码制模块：Code 128 + DataMatrix ECC200（本项目实现）===== -->
+<script>
+/* =====================================================================
+   QRprint — 码制模块（Code 128 一维条码 + Data Matrix ECC200）
+   ---------------------------------------------------------------------
+   二维码沿用内联的 qrcode.js；本文件补上另外两种，同样不依赖任何外部资源。
+   两者都输出 {w, h, get(x,y)} 形式的点阵，再由 toDataURL() 画成 PNG。
+
+   实现依据：
+     Code 128  —— ISO/IEC 15417，107 个 11 模块图案 + 模 103 校验
+     Data Matrix —— ISO/IEC 16022 ECC200：ASCII 编码 + GF(256) RS 纠错
+                    + Annex F 的 utah 放置算法
+   ===================================================================== */
+var QRPCodes = (function(){
+  "use strict";
+
+  /* ============================================================ Code 128 */
+  // 107 个图案，每个 6 个元素（条,空,条,空,条,空）共 11 模块；106 为终止符（13 模块）
+  var C128 = [
+    "212222","222122","222221","121223","121322","131222","122213","122312","132212","221213",
+    "221312","231212","112232","122132","122231","113222","123122","123221","223211","221132",
+    "221231","213212","223112","312131","311222","321122","321221","312212","322112","322211",
+    "212123","212321","232121","111323","131123","131321","112313","132113","132311","211313",
+    "231113","231311","112133","112331","132131","113123","113321","133121","313121","211331",
+    "231131","213113","213311","213131","311123","311321","331121","312113","312311","332111",
+    "314111","221411","431111","111224","111422","121124","121421","141122","141221","112214",
+    "112412","122114","122411","142112","142211","241211","221114","413111","241112","134111",
+    "111242","121142","121241","114212","124112","124211","411212","421112","421211","212141",
+    "214121","412121","111143","111341","131141","114113","114311","411113","411311","113141",
+    "114131","311141","411131","211412","211214","211232","2331112"
+  ];
+  var START_B = 104, START_C = 105, STOP = 106;
+
+  function isDigits(s){ return /^[0-9]+$/.test(s); }
+
+  // 只支持可打印 ASCII（32~126）。中文等超出 Code 128 字符集，返回 null 由调用方提示。
+  function code128Values(text){
+    var i;
+    for(i=0;i<text.length;i++){
+      var c = text.charCodeAt(i);
+      if(c < 32 || c > 126) return null;
+    }
+    if(text.length === 0) return null;
+
+    var vals = [];
+    if(isDigits(text) && text.length % 2 === 0){
+      // 纯偶数位数字 → 全程 Code C，长度减半
+      vals.push(START_C);
+      for(i=0;i<text.length;i+=2) vals.push(parseInt(text.substr(i,2),10));
+    }else{
+      // 其余一律 Code B，简单且永远合法
+      vals.push(START_B);
+      for(i=0;i<text.length;i++) vals.push(text.charCodeAt(i) - 32);
+    }
+    // 校验位：起始符权重 1，其后依次 1,2,3…，模 103
+    var sum = vals[0];
+    for(i=1;i<vals.length;i++) sum += vals[i] * i;
+    vals.push(sum % 103);
+    vals.push(STOP);
+    return vals;
+  }
+
+  // 展开成模块位数组（1=条，0=空），两端各留 10 模块静区
+  function code128Modules(text){
+    var vals = code128Values(text);
+    if(!vals) return null;
+    var QUIET = 10, bits = [], i, k;
+    for(i=0;i<QUIET;i++) bits.push(0);
+    for(i=0;i<vals.length;i++){
+      var pat = C128[vals[i]], dark = 1;
+      for(k=0;k<pat.length;k++){
+        var n = pat.charCodeAt(k) - 48;
+        while(n-- > 0) bits.push(dark);
+        dark ^= 1;
+      }
+    }
+    for(i=0;i<QUIET;i++) bits.push(0);
+    return { bits:bits, values:vals };
+  }
+
+  /* ========================================================= Data Matrix */
+  // GF(256)，本原多项式 0x12D
+  var LOG = new Int16Array(256), EXP = new Int16Array(512);
+  (function(){
+    var x = 1;
+    for(var i=0;i<255;i++){
+      EXP[i] = x; LOG[x] = i;
+      x <<= 1;
+      if(x & 0x100) x ^= 0x12D;
+    }
+    for(i=255;i<512;i++) EXP[i] = EXP[i-255];
+    LOG[0] = 0;
+  })();
+  function gmul(a,b){ return (a===0||b===0) ? 0 : EXP[LOG[a]+LOG[b]]; }
+
+  // 生成多项式 Π(x - α^i)，i = 1..n（Data Matrix 从 α^1 起）
+  function rsGen(n){
+    var g = [1], i, j;
+    for(i=1;i<=n;i++){
+      g.push(0);
+      for(j=g.length-1;j>0;j--) g[j] = g[j-1] ^ gmul(g[j], EXP[i]);
+      g[0] = gmul(g[0], EXP[i]);
+    }
+    return g;   // g[0] 为常数项，g[n] = 1
+  }
+  function rsEcc(data, n){
+    var g = rsGen(n), ecc = new Array(n), i, j;
+    for(i=0;i<n;i++) ecc[i] = 0;
+    for(i=0;i<data.length;i++){
+      var f = data[i] ^ ecc[0];
+      for(j=0;j<n-1;j++) ecc[j] = ecc[j+1] ^ gmul(g[n-1-j], f);
+      ecc[n-1] = gmul(g[0], f);
+    }
+    return ecc;
+  }
+
+  // 只用单块（无交织）的方形规格，覆盖到 204 个数据码字，够任何 Key 用
+  //            [符号边长, 数据码字, 纠错码字, 区块行数(=列数)]
+  var DM_SIZES = [
+    [10,   3,   5, 1], [12,   5,   7, 1], [14,   8,  10, 1], [16,  12,  12, 1],
+    [18,  18,  14, 1], [20,  22,  18, 1], [22,  30,  20, 1], [24,  36,  24, 1],
+    [26,  44,  28, 1], [32,  62,  36, 2], [36,  86,  42, 2], [40, 114,  48, 2],
+    [44, 144,  56, 2], [48, 174,  68, 2], [52, 204,  84, 2]
+  ];
+
+  // ASCII 编码：两位数字合并，其余单字节；>127 用 Upper Shift(235)
+  function dmEncode(text){
+    var out = [], i = 0;
+    while(i < text.length){
+      var c = text.charCodeAt(i);
+      var d1 = text.charCodeAt(i), d2 = (i+1 < text.length) ? text.charCodeAt(i+1) : -1;
+      if(d1>=48 && d1<=57 && d2>=48 && d2<=57){
+        out.push((d1-48)*10 + (d2-48) + 130); i += 2; continue;
+      }
+      if(c < 128){ out.push(c + 1); i++; continue; }
+      if(c < 256){ out.push(235); out.push(c - 128 + 1); i++; continue; }
+      return null;   // 非 Latin-1（如中文）无法用 ASCII 编码方案表示
+    }
+    return out;
+  }
+
+  // 填充：首个用 129(PAD)，其后按 253 状态随机化
+  function dmPad(data, cap){
+    if(data.length > cap) return null;
+    if(data.length < cap){
+      data.push(129);
+      while(data.length < cap){
+        var pos = data.length + 1;                 // 1 基码字位置
+        var r = ((149 * pos) % 253) + 1;
+        var v = 129 + r;
+        data.push(v > 254 ? v - 254 : v);
+      }
+    }
+    return data;
+  }
+
+  /* ---- Annex F：把码字比特摆进映射矩阵 ---- */
+  function dmPlace(nrow, ncol, total){
+    var arr = new Int32Array(nrow*ncol);           // 0 = 未填，否则 = 码字号*10 + 位号
+
+    function put(row, col, chr, bit){
+      if(row < 0){ row += nrow; col += 4 - ((nrow + 4) % 8); }
+      if(col < 0){ col += ncol; row += 4 - ((ncol + 4) % 8); }
+      arr[row*ncol + col] = chr*10 + bit;
+    }
+    function utah(row, col, chr){
+      put(row-2, col-2, chr, 1); put(row-2, col-1, chr, 2);
+      put(row-1, col-2, chr, 3); put(row-1, col-1, chr, 4);
+      put(row-1, col,   chr, 5); put(row,   col-2, chr, 6);
+      put(row,   col-1, chr, 7); put(row,   col,   chr, 8);
+    }
+    function corner1(chr){
+      put(nrow-1, 0, chr, 1); put(nrow-1, 1, chr, 2); put(nrow-1, 2, chr, 3);
+      put(0, ncol-2, chr, 4); put(0, ncol-1, chr, 5); put(1, ncol-1, chr, 6);
+      put(2, ncol-1, chr, 7); put(3, ncol-1, chr, 8);
+    }
+    function corner2(chr){
+      put(nrow-3, 0, chr, 1); put(nrow-2, 0, chr, 2); put(nrow-1, 0, chr, 3);
+      put(0, ncol-4, chr, 4); put(0, ncol-3, chr, 5); put(0, ncol-2, chr, 6);
+      put(0, ncol-1, chr, 7); put(1, ncol-1, chr, 8);
+    }
+    function corner3(chr){
+      put(nrow-3, 0, chr, 1); put(nrow-2, 0, chr, 2); put(nrow-1, 0, chr, 3);
+      put(0, ncol-2, chr, 4); put(0, ncol-1, chr, 5); put(1, ncol-1, chr, 6);
+      put(2, ncol-1, chr, 7); put(3, ncol-1, chr, 8);
+    }
+    function corner4(chr){
+      put(nrow-1, 0, chr, 1); put(nrow-1, ncol-1, chr, 2); put(nrow-3, 0, chr, 3);
+      put(nrow-2, 0, chr, 4); put(nrow-1, 0, chr, 5); put(nrow-3, ncol-1, chr, 6);
+      put(nrow-2, ncol-1, chr, 7); put(nrow-1, ncol-1, chr, 8);
+    }
+    function free(r,c){ return arr[r*ncol + c] === 0; }
+
+    var chr = 1, row = 4, col = 0;
+    do{
+      if(row === nrow && col === 0) corner1(chr++);
+      if(row === nrow-2 && col === 0 && (ncol % 4) !== 0) corner2(chr++);
+      if(row === nrow-2 && col === 0 && (ncol % 8) === 4) corner3(chr++);
+      if(row === nrow+4 && col === 2 && (ncol % 8) === 0) corner4(chr++);
+      do{
+        if(row < nrow && col >= 0 && free(row,col)) utah(row, col, chr++);
+        row -= 2; col += 2;
+      }while(row >= 0 && col < ncol);
+      row += 1; col += 3;
+      do{
+        if(row >= 0 && col < ncol && free(row,col)) utah(row, col, chr++);
+        row += 2; col -= 2;
+      }while(row < nrow && col >= 0);
+      row += 3; col += 1;
+    }while(row < nrow || col < ncol);
+
+    // 右下角 2×2 若未被码字占用，按规范填成固定图案：
+    //   ■ □        -1 = 恒暗
+    //   □ ■        -2 = 恒亮
+    var corner = false;
+    if(free(nrow-1, ncol-1)){
+      arr[(nrow-1)*ncol + ncol-1] = -1;
+      arr[(nrow-2)*ncol + ncol-2] = -1;
+      arr[(nrow-1)*ncol + ncol-2] = -2;
+      arr[(nrow-2)*ncol + ncol-1] = -2;
+      corner = true;
+    }
+    return { map:arr, cornerFixed:corner, used:chr-1, expect:total };
+  }
+
+  function dataMatrix(text){
+    var data = dmEncode(text);
+    if(!data) return null;
+    var spec = null, i;
+    for(i=0;i<DM_SIZES.length;i++){
+      if(data.length <= DM_SIZES[i][1]){ spec = DM_SIZES[i]; break; }
+    }
+    if(!spec) return null;
+
+    var side = spec[0], cap = spec[1], eccN = spec[2], reg = spec[3];
+    data = dmPad(data.slice(), cap);
+    if(!data) return null;
+    var all = data.concat(rsEcc(data, eccN));
+
+    // 映射矩阵尺寸 = 符号尺寸去掉每个区块四周的定位边
+    var nrow = side - 2*reg, ncol = side - 2*reg;
+    var pl = dmPlace(nrow, ncol, all.length);
+
+    var mapBits = new Uint8Array(nrow*ncol);
+    for(i=0;i<nrow*ncol;i++){
+      var v = pl.map[i];
+      if(v === -1){ mapBits[i] = 1; continue; }    // 角落固定暗
+      if(v <= 0){ mapBits[i] = 0; continue; }      // 角落固定亮
+      var cw = Math.floor(v/10), bit = v % 10;      // bit 1 = 最高位
+      mapBits[i] = (all[cw-1] >> (8 - bit)) & 1;
+    }
+
+    // 组装成完整符号：每个区块加 L 形定位边与交替时钟边
+    var dr = nrow / reg, dc = ncol / reg;           // 单区块数据区尺寸
+    var sym = new Uint8Array(side*side);
+    var ri, rj, r, c;
+    for(ri=0; ri<reg; ri++){
+      for(rj=0; rj<reg; rj++){
+        var r0 = ri*(dr+2), c0 = rj*(dc+2);
+        for(r=0;r<dr;r++){
+          for(c=0;c<dc;c++){
+            sym[(r0+1+r)*side + (c0+1+c)] = mapBits[(ri*dr+r)*ncol + (rj*dc+c)];
+          }
+        }
+        for(r=0;r<dr+2;r++){
+          sym[(r0+r)*side + c0] = 1;                         // 左边实心
+          sym[(r0+r)*side + (c0+dc+1)] = (r % 2) ? 1 : 0;    // 右边交替
+        }
+        for(c=0;c<dc+2;c++){
+          sym[(r0+dr+1)*side + (c0+c)] = 1;                  // 下边实心
+          sym[r0*side + (c0+c)] = (c % 2) ? 0 : 1;           // 上边交替
+        }
+      }
+    }
+    return { size:side, bits:sym, codewords:all, data:data, ecc:all.slice(cap),
+             spec:spec, place:pl };
+  }
+
+  /* ===================================================== 画成 SVG data URL */
+  // 用矢量而不是位图：打印时无论放大到多少 mm，条宽/模块边界都是精确的，
+  // 不会像位图那样被重采样糊掉——这对能否扫得动是关键。
+  function svgURL(w, h, path, stretch){
+    var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + w + ' ' + h + '" ' +
+            (stretch ? 'preserveAspectRatio="none" ' : '') +
+            'shape-rendering="crispEdges">' +
+            '<rect width="' + w + '" height="' + h + '" fill="#fff"/>' +
+            '<path fill="#000" d="' + path + '"/></svg>';
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s);
+  }
+
+  // Code 128：viewBox 单位 = 1 模块；barH 为条高（模块数）
+  function code128URL(text, barH){
+    var m = code128Modules(text);
+    if(!m) return null;
+    var h = barH || 30, d = "", i = 0, bits = m.bits;
+    while(i < bits.length){
+      if(bits[i]){
+        var j = i; while(j < bits.length && bits[j]) j++;
+        d += "M" + i + " 0h" + (j-i) + "v" + h + "h-" + (j-i) + "z";
+        i = j;
+      }else i++;
+    }
+    // 条码横向被拉伸填满标签框：各条宽度按同一比例缩放，相对关系不变，仍可扫
+    return svgURL(bits.length, h, d, true);
+  }
+  // 一个 Key 编成 Code 128 后的总模块数（用来算最窄条宽是否还扫得动）
+  function code128Width(text){
+    var m = code128Modules(text);
+    return m ? m.bits.length : 0;
+  }
+
+  // Data Matrix：viewBox 单位 = 1 模块，quiet 为静区模块数（规范要求 ≥1）
+  function dataMatrixURL(text, quiet){
+    var dm = dataMatrix(text);
+    if(!dm) return null;
+    var q = (quiet === undefined) ? 2 : quiet;
+    var n = dm.size, side = n + 2*q, d = "", r, c;
+    for(r=0;r<n;r++){
+      c = 0;
+      while(c < n){
+        if(dm.bits[r*n+c]){
+          var e = c; while(e < n && dm.bits[r*n+e]) e++;
+          d += "M" + (c+q) + " " + (r+q) + "h" + (e-c) + "v1h-" + (e-c) + "z";
+          c = e;
+        }else c++;
+      }
+    }
+    return svgURL(side, side, d);
+  }
+
+  return {
+    code128Modules: code128Modules,
+    code128Values: code128Values,
+    code128URL: code128URL,
+    code128Width: code128Width,
+    dataMatrix: dataMatrix,
+    dataMatrixURL: dataMatrixURL,
+    dmEncode: dmEncode,
+    rsEcc: rsEcc,
+    gmul: gmul,
+    EXP: EXP,
+    LOG: LOG,
+    C128: C128,
+    DM_SIZES: DM_SIZES
+  };
+})();
+</script>
+
 <!-- ===== 应用逻辑 ===== -->
 <script>
 /* =====================================================================
    QRprint — 应用逻辑（单文件内联）
    ---------------------------------------------------------------------
-   全程在浏览器内运行：表格解析（SheetJS）与二维码生成（qrcode.js）都是
-   内联依赖，页面用 CSP 禁止了一切网络请求，数据不上传、不落盘。
+   全程在浏览器内运行：表格解析（SheetJS）、二维码（qrcode.js）、
+   Code 128 与 DataMatrix（QRPCodes）都是内联依赖，
+   页面用 CSP 禁止了一切网络请求，数据不上传、不落盘。
 
-   术语：Key = 二维码内容，也是标签上必定显示的第一行。其余列均为可选字段。
+   术语：Key = 码图内容，也是标签上必定显示的第一行；其余列均为可选字段。
 
    排版计算（renderA4 / renderLabels）与上方样式表中的
    .a4page / .grid / .cell 规则一一对应，改动会直接影响出纸尺寸。
@@ -3078,8 +3571,12 @@ var qrcode = function() {
   var MAXPREVIEW = 2000;          // 预览渲染上限（打印时可选择渲染全部）
   var MAXROWS    = 200000;        // 单次最多解析行数，防止超大文件把浏览器卡死
   var MAXFILE    = 60*1024*1024;  // 单个文件大小上限 60MB
-  var MAXCACHE   = 8000;          // 二维码缓存上限，防止内存无限增长
+  var MAXCACHE   = 8000;          // 码图缓存上限，防止内存无限增长
   var MAXTEXT    = 300;           // 单格文本最大字符数，防止异常长内容撑破版面
+  var MAXFIELDS  = 6;             // 标签上最多显示几个可选字段（再多就挤不下了）
+  var CHIPVIS    = 8;             // 字段胶囊默认露出几个，其余折叠
+  var MAXENUM    = 300;           // 超过这么多不同取值就不当枚举列
+  var MINBAR     = 0.19;          // Code128 最窄条宽警戒线（mm），低于此扫描仪容易读不到
   var QR_EC = "M", QR_TYPE = 0;
 
   var PW = 194, PH = 281;         // A4 去掉 8mm 页边距后的可用区域（mm）
@@ -3088,8 +3585,10 @@ var qrcode = function() {
   function dict(){ return Object.create(null); }
 
   // 表头别名（大小写/空格/点/下划线/括号 无关）
-  //   key —— 二维码内容列，必需；认不出时退回第 1 列
-  //   desc/whs/qty —— 可选列的特殊待遇（默认勾选 / 提供筛选 / 自动合计）
+  //   key  —— 码图内容列，必需；认不出时退回第 1 列
+  //   desc —— 默认勾选的描述列
+  //   qty  —— 会自动求和的数量列
+  // 仓库不再特殊对待：它已经被通用的「枚举筛选」覆盖。
   var ALIAS = {
     item : ["key","itemno","itemcode","itemnumber","itemid","code","id","no","number",
             "barcode","sn","serialno","partno","partnumber",
@@ -3097,15 +3596,16 @@ var qrcode = function() {
             "条码","条形码","序列号","关键字","主键"],
     desc : ["itemdescription","description","itemname","name","title",
             "物料描述","描述","品名","物料名称","名称","标题","说明"],
-    whs  : ["warehousecode","warehouse","whscode","仓库","仓库代码","仓库编号","库位"],
     qty  : ["instock","stock","onhand","qty","quantity","库存","现有量","在库","库存量","数量"]
   };
 
-  var cols = [];      // [{name, isQty, isWhs, isDesc}] 除 Key 外的全部列
-  var rawRows = [];   // [{item, qty, v:{列名:值}}]
+  var cols = [];        // [{name, isQty, isDesc, isEnum, isNum, values[]}] 除 Key 外的全部列
+  var keyCol = null;    // Key 列自身的统计
+  var rawRows = [];     // [{item, qty, v:{列名:值}}]
   var truncated = false;
-  var keyFallback = false;   // 未识别到 Key 列、退回用第 1 列
-  var fullRender = false;    // 打印时临时渲染全部（跳过预览上限）
+  var keyFallback = false;
+  var fullRender = false;
+  var chipsExpanded = false;
 
   function norm(s){ return String(s==null?"":s).toLowerCase().replace(/[\s._\-()（）]/g,""); }
   function cellv(row, idx){
@@ -3113,7 +3613,16 @@ var qrcode = function() {
     var v = row[idx];
     return (typeof v==="number") ? v : String(v).trim();
   }
-  function num(v){ var n = parseFloat(String(v).replace(/,/g,"")); return isNaN(n)?0:n; }
+  // 严格数字：整串必须是数字才算。用 parseFloat 会把 "0303000001-00" 认成 303000001，
+  // 于是把编号类的 Key 误判成数值列。
+  var NUMRE = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+  function toNum(v){
+    if(v==null) return NaN;
+    var s = String(v).trim().replace(/,/g,"");
+    if(s === "" || !NUMRE.test(s)) return NaN;
+    return parseFloat(s);
+  }
+  function num(v){ var n = toNum(v); return isNaN(n)?0:n; }
   function fmtQty(n){ return Math.abs(n)>=1e9 ? String(n) : String(Math.round(n*1000)/1000); }
   function clip(s){ s = String(s==null?"":s); return s.length>MAXTEXT ? s.slice(0,MAXTEXT) : s; }
   function radio(name){
@@ -3142,8 +3651,9 @@ var qrcode = function() {
                   (keyFallback ? "（未识别到 Key 列，已用第 1 列）" : "") +
                   (truncated ? "（已达 "+MAXROWS+" 行上限）" : ""),
                   (truncated || keyFallback) ? "warn" : "ok");
+        chipsExpanded = false;
         buildFieldBox();
-        buildFilters();
+        buildFilterUI();
         updateCharTip();
         closeDrawer();
         resetZoom();
@@ -3153,9 +3663,41 @@ var qrcode = function() {
     reader.readAsArrayBuffer(f);
   });
 
+  // 边解析边统计每列的「非空数 / 数字数 / 不同取值」，用于后面判断列类型
+  function newStat(){ return { nonEmpty:0, numeric:0, dv:dict(), dvN:0, dvOver:false }; }
+  function feedStat(st, val){
+    var s = String(val);
+    if(s === "") return;
+    st.nonEmpty++;
+    if(!isNaN(toNum(s))) st.numeric++;
+    if(!st.dvOver && st.dv[s] === undefined){
+      if(st.dvN >= MAXENUM){ st.dvOver = true; st.dv = dict(); }
+      else { st.dv[s] = 1; st.dvN++; }
+    }
+  }
+  function finishStat(st){
+    var vals = [];
+    if(!st.dvOver) for(var k in st.dv) vals.push(k);
+    vals.sort(function(a,b){
+      var na = toNum(a), nb = toNum(b);
+      if(!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a < b ? -1 : (a > b ? 1 : 0);
+    });
+    return {
+      // 枚举列：取值有限且确实有重复
+      isEnum: !st.dvOver && st.dvN > 0 && st.dvN < st.nonEmpty,
+      // 数值列：非空值里八成以上能当数字
+      isNum:  st.nonEmpty > 0 && st.numeric / st.nonEmpty >= 0.8,
+      values: vals,
+      nonEmpty: st.nonEmpty
+    };
+  }
+
   function parseWorkbook(wb){
     cols = []; rawRows = [];
-    var seen = dict(); truncated = false; keyFallback = false;
+    var seen = dict(), stats = dict(), keyStat = newStat();
+    truncated = false; keyFallback = false;
+
     wb.SheetNames.forEach(function(sn){
       if(rawRows.length >= MAXROWS){ truncated = true; return; }
       var aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:""});
@@ -3163,15 +3705,16 @@ var qrcode = function() {
       if(info.fallback) keyFallback = true;
       var cm = info.colMap, hdr = aoa[info.headerRow] || [];
 
-      var idxList = [];                       // [[列号, 列名, isQty, isWhs]]
+      var idxList = [];                       // [[列号, 列名, isQty]]
       for(var c=0;c<hdr.length;c++){
         if(c === cm.item) continue;
         var name = String(hdr[c]).trim() || ("列"+(c+1));
-        var isQty = (c === cm.qty), isWhs = (c === cm.whs);
-        idxList.push([c, name, isQty, isWhs]);
+        var isQty = (c === cm.qty);
+        idxList.push([c, name, isQty]);
         if(!seen[name]){
           seen[name]=1;
-          cols.push({name:name, isQty:isQty, isWhs:isWhs, isDesc:(c===cm.desc)});
+          stats[name] = newStat();
+          cols.push({name:name, isQty:isQty, isDesc:(c===cm.desc)});
         }
       }
 
@@ -3180,18 +3723,29 @@ var qrcode = function() {
         var row = aoa[r]; if(!row) continue;
         var item = clip(String(cellv(row, cm.item)).trim());
         if(item==="") continue;
+        feedStat(keyStat, item);
         var v = dict(), qty = 0;
         idxList.forEach(function(p){
           var val = cellv(row, p[0]);
-          v[p[1]] = clip((typeof val==="number") ? String(val) : val);
+          var s = clip((typeof val==="number") ? String(val) : val);
+          v[p[1]] = s;
+          if(stats[p[1]]) feedStat(stats[p[1]], s);
           if(p[2]) qty = num(val);
         });
         rawRows.push({ item:item, qty:qty, v:v });
       }
     });
+
+    cols.forEach(function(o){
+      var f = finishStat(stats[o.name] || newStat());
+      o.isEnum = f.isEnum; o.isNum = f.isNum; o.values = f.values;
+    });
+    var kf = finishStat(keyStat);
+    keyCol = { name:"Key", isKey:true, isQty:false,
+               isEnum:kf.isEnum, isNum:kf.isNum, values:kf.values };
   }
 
-  // 先按别名找 Key 列；找不到就退回「前 30 行里第一行有 ≥1 个非空单元格的行」作表头、第 1 列作 Key
+  // 先按别名找 Key 列；找不到就退回「前 30 行里第一行有 ≥2 个非空单元格的行」作表头、第 1 列作 Key
   function locateHeader(aoa){
     var limit = Math.min(aoa.length, 30), i, c;
     for(i=0; i<limit; i++){
@@ -3211,7 +3765,6 @@ var qrcode = function() {
       for(c=0;c<row.length;c++){
         if(String(row[c]==null?"":row[c]).trim()!==""){ filled++; if(firstIdx<0) firstIdx=c; }
       }
-      // 至少两列才像表头，且下面还得有数据行
       if(filled >= 2 && i+1 < aoa.length){
         return { headerRow:i, colMap:{ item:firstIdx }, fallback:true };
       }
@@ -3230,7 +3783,7 @@ var qrcode = function() {
       var cb = document.createElement("input");
       cb.type = "checkbox"; cb.className = "fchk"; cb.checked = !!o.isDesc;
       cb.setAttribute("data-idx", String(i));
-      cb.addEventListener("change", function(){ updateCharTip(); render(); });
+      cb.addEventListener("change", onFieldToggle);
       lab.appendChild(cb);
       lab.appendChild(document.createTextNode(o.name));
       if(o.isQty){
@@ -3239,10 +3792,49 @@ var qrcode = function() {
       }
       box.appendChild(lab);
     });
-    $("fieldHint").textContent = cols.length
-      ? "共 " + cols.length + " 个可选字段。勾选的字段同时参与去重。"
-      : "该表除 Key 外没有其它列。";
+    refreshChips();
   }
+
+  // 字段很多时只露前 CHIPVIS 个（已勾选的永远露出），其余折叠起来
+  function refreshChips(){
+    var chips = Array.prototype.slice.call(document.querySelectorAll("#fieldBox .chip"));
+    var shown = 0, hidden = 0;
+    chips.forEach(function(lab){
+      var cb = lab.querySelector("input");
+      var mustShow = cb.checked || chipsExpanded;
+      if(mustShow || shown < CHIPVIS){ lab.classList.remove("extra"); shown++; }
+      else { lab.classList.add("extra"); hidden++; }
+    });
+    $("chips").classList.toggle("is-clipped", !chipsExpanded);
+    var tg = $("chipsToggle");
+    if(hidden > 0 || chipsExpanded){
+      tg.classList.remove("hide");
+      tg.textContent = chipsExpanded ? "收起" : ("展开全部 " + chips.length + " 个");
+    }else tg.classList.add("hide");
+
+    var n = checkedCols().length;
+    var base = cols.length ? ("共 " + cols.length + " 个可选字段，已选 " + n + "/" + MAXFIELDS +
+                              "。勾选的字段同时参与去重。")
+                           : "该表除 Key 外没有其它列。";
+    $("fieldHint").textContent = base;
+    $("fieldHint").className = "hint";
+    // 到上限后把未勾选的禁掉，避免标签被塞爆
+    chips.forEach(function(lab){
+      var cb = lab.querySelector("input");
+      cb.disabled = (!cb.checked && n >= MAXFIELDS);
+    });
+    if(n >= MAXFIELDS){
+      $("fieldHint").textContent = base + " 已达上限，如需换字段请先取消一个。";
+      $("fieldHint").className = "hint warn";
+    }
+  }
+
+  function onFieldToggle(){
+    refreshChips();
+    updateCharTip();
+    render();
+  }
+
   function checkedCols(){
     var out = [];
     Array.prototype.forEach.call(document.querySelectorAll(".fchk"), function(el){
@@ -3253,116 +3845,236 @@ var qrcode = function() {
     });
     return out;
   }
-  function whsCol(){
-    for(var i=0;i<cols.length;i++) if(cols[i].isWhs) return cols[i].name;
-    return null;
-  }
-  function hasQtyCol(){
-    for(var i=0;i<cols.length;i++) if(cols[i].isQty) return true;
-    return false;
-  }
 
-  /* ---------------------------- 聚合（按 Key + 已勾选字段去重；库存列合计） */
-  function aggregate(){
+  /* ------------------------ 聚合（按 Key + 已勾选字段去重；数量列自动合计） */
+  // 说明：显示出来的列要么参与了去重（组内取值必然相同），要么是会被合计的数量列，
+  // 所以这里不需要再做「多值合并」——原先针对仓库的特判已经不必要了。
+  function aggregate(rows){
     var sel = checkedCols();
     var keyCols = sel.filter(function(o){ return !o.isQty; });
-    var wc = whsCol(), whsChecked = sel.some(function(o){ return o.isWhs; });
     var map = dict(), out = [];
-    rawRows.forEach(function(r){
+    rows.forEach(function(r){
       var k = [r.item];
       keyCols.forEach(function(o){ k.push(r.v[o.name]||""); });
-      var key = k.join("");
+      var key = k.join(" ");
       var g = map[key];
       if(!g){
-        g = { item:r.item, qty:0, v:dict(), whsList:[] };
-        for(var n in r.v) g.v[n] = r.v[n];
+        g = { item:r.item, qty:0, v:r.v };
         map[key] = g; out.push(g);
       }
       g.qty += r.qty;
-      for(var n2 in r.v){ if(!g.v[n2]) g.v[n2] = r.v[n2]; }
-      if(wc){ var w = r.v[wc]; if(w && g.whsList.indexOf(w)<0) g.whsList.push(w); }
-      if(!whsChecked && wc) g.v[wc] = g.whsList.join("/");
     });
     return out;
   }
 
-  // 仓库 / 库存筛选只在表里真有对应列时才出现
-  function buildFilters(){
-    var wc = whsCol(), sel = $("whsFilter"), cur = sel.value, seen = dict(), list = [];
-    if(wc) rawRows.forEach(function(r){ var w=r.v[wc]; if(w && !seen[w]){ seen[w]=1; list.push(w); } });
-    list.sort();
-    sel.textContent = "";
-    var all = document.createElement("option"); all.value = ""; all.textContent = "全部";
-    sel.appendChild(all);
-    list.forEach(function(w){
-      var op = document.createElement("option"); op.value = w; op.textContent = w; sel.appendChild(op);
-    });
-    if(list.indexOf(cur)>=0) sel.value = cur;
-
-    var showWhs = !!wc && list.length > 0;
-    $("whsWrap").classList.toggle("hide", !showWhs);
-    if(!showWhs) sel.value = "";
-
-    var showQty = hasQtyCol();
-    $("stockWrap").classList.toggle("hide", !showQty);
-    if(!showQty) $("stockFilter").value = "all";
+  /* ================================================== 通用筛选：三个条件 */
+  // 字段令牌："__all__" 全部字段 | "__key__" Key 列 | "c<下标>" 普通列
+  function fieldOf(tok){
+    if(!tok || tok === "__all__") return null;
+    if(tok === "__key__") return keyCol;
+    var i = parseInt(tok.slice(1),10);
+    return cols[i] || null;
+  }
+  function valueOfRow(r, f){
+    if(!f) return null;
+    return f.isKey ? r.item : (r.v[f.name] || "");
   }
 
-  /* --------------------------------------------------- 关键字（批量匹配） */
+  function fillFieldSelect(sel, list, firstLabel, firstValue){
+    var cur = sel.value;
+    sel.textContent = "";
+    var op0 = document.createElement("option");
+    op0.value = firstValue; op0.textContent = firstLabel;
+    sel.appendChild(op0);
+    list.forEach(function(p){
+      var op = document.createElement("option");
+      op.value = p[0]; op.textContent = p[1];
+      sel.appendChild(op);
+    });
+    var has = Array.prototype.some.call(sel.options, function(o){ return o.value === cur; });
+    sel.value = has ? cur : firstValue;
+  }
+
+  function buildFilterUI(){
+    var all = [["__key__","Key"]], enums = [], nums = [];
+    if(keyCol && keyCol.isEnum) enums.push(["__key__","Key"]);
+    if(keyCol && keyCol.isNum)  nums.push(["__key__","Key"]);
+    cols.forEach(function(o,i){
+      all.push(["c"+i, o.name]);
+      if(o.isEnum) enums.push(["c"+i, o.name]);
+      if(o.isNum)  nums.push(["c"+i, o.name]);
+    });
+
+    fillFieldSelect($("tField"), all, "全部字段", "__all__");
+    fillFieldSelect($("eField"), enums, "不启用", "");
+    fillFieldSelect($("nField"), nums, "不启用", "");
+
+    $("enumCond").classList.toggle("hide", enums.length === 0);
+    $("numCond").classList.toggle("hide", nums.length === 0);
+    onEnumFieldChange();
+    onNumFieldChange();
+  }
+
+  function onEnumFieldChange(){
+    var f = fieldOf($("eField").value), sel = $("eValue");
+    sel.textContent = "";
+    var op0 = document.createElement("option");
+    op0.value = "__all__"; op0.textContent = "全部";
+    sel.appendChild(op0);
+    if(!f){
+      sel.disabled = true;
+      $("enumCond").classList.add("is-off");
+      $("enumTip").textContent = "";
+      return;
+    }
+    (f.values || []).forEach(function(v){
+      var op = document.createElement("option");
+      op.value = v; op.textContent = v;
+      sel.appendChild(op);
+    });
+    sel.disabled = false;
+    $("enumCond").classList.remove("is-off");
+    $("enumTip").textContent = "「" + f.name + "」共 " + (f.values||[]).length + " 种取值";
+  }
+
+  function onNumFieldChange(){
+    var f = fieldOf($("nField").value), on = !!f;
+    $("nOp").disabled = !on;
+    $("nValue").disabled = !on;
+    $("numCond").classList.toggle("is-off", !on);
+    $("numTip").textContent = on
+      ? ("比较「" + f.name + "」" + (f.isQty ? "（去重后的合计值）" : "（原始行的值）"))
+      : "";
+  }
+
+  function cmp(a, op, b){
+    switch(op){
+      case "gt": return a >  b;
+      case "ge": return a >= b;
+      case "eq": return a === b;
+      case "ne": return a !== b;
+      case "le": return a <= b;
+      case "lt": return a <  b;
+    }
+    return true;
+  }
+
   function kwTokens(){
     return $("kw").value.split(/[\s,;，、\r\n\t]+/)
       .map(function(s){ return s.trim(); }).filter(function(s){ return s!==""; });
   }
 
-  var lastMissing = [];
-  function currentItems(){
-    var whsF = $("whsFilter").value, wc = whsCol();
-    var toks = kwTokens(), exact = radio("kwmode") === "exact";
-    var only = $("stockFilter").value === "gt0";
-    var rows = aggregate();
-    var lowToks = toks.slice(0, 5000).map(function(t){ return t.toLowerCase(); });
-    var hit = dict();
+  function buildConds(){
+    var c = { t:{on:false}, e:{on:false}, n:{on:false} };
 
-    rows = rows.filter(function(r){
-      if(whsF && wc){
-        var w = r.v[wc] || "";
-        if(w !== whsF && (r.whsList||[]).indexOf(whsF) < 0) return false;
-      }
-      if(only && !(r.qty > 0)) return false;
-      if(lowToks.length){
-        var matched = false;
-        if(exact){
-          var it = r.item.toLowerCase();
-          for(var i=0;i<lowToks.length;i++){ if(it===lowToks[i]){ matched=true; hit[lowToks[i]]=1; break; } }
-        }else{
-          var hay = r.item;
-          for(var n in r.v) hay += " " + r.v[n];
-          hay = hay.toLowerCase();
-          for(var j=0;j<lowToks.length;j++){ if(hay.indexOf(lowToks[j])>=0){ matched=true; hit[lowToks[j]]=1; } }
-        }
-        if(!matched) return false;
-      }
-      return true;
-    });
+    var toks = kwTokens();
+    if(toks.length){
+      c.t.on = true;
+      c.t.field = fieldOf($("tField").value);        // null = 全部字段
+      c.t.all = ($("tField").value === "__all__");
+      c.t.exact = radio("kwmode") === "exact";
+      c.t.toks = toks.slice(0, 5000);
+      c.t.low = c.t.toks.map(function(s){ return s.toLowerCase(); });
+    }
 
-    lastMissing = lowToks.length ? toks.filter(function(t){ return !hit[t.toLowerCase()]; }) : [];
+    var ef = fieldOf($("eField").value);
+    if(ef && $("eValue").value !== "__all__"){
+      c.e.on = true; c.e.f = ef; c.e.val = $("eValue").value;
+    }
 
-    var from = parseInt($("from").value,10), to = parseInt($("to").value,10);
-    var s = (!isNaN(from) && from>0) ? from-1 : 0;
-    var e = (!isNaN(to) && to>0) ? to : rows.length;
-    return rows.slice(s, e);
+    var nf = fieldOf($("nField").value), nv = toNum($("nValue").value);
+    if(nf && !isNaN(nv)){
+      c.n.on = true; c.n.f = nf; c.n.op = $("nOp").value; c.n.val = nv;
+      c.n.onSum = !!nf.isQty;                        // 数量列比的是合计值，聚合后再判
+    }
+    return c;
   }
 
-  /* --------------------------------------------------------------- 二维码 */
-  var qrCache = dict(), qrCacheN = 0;
-  function qrDataURL(text, cellSize){
-    var key = text + "|" + cellSize;
-    if(qrCache[key]) return qrCache[key];
-    if(qrCacheN >= MAXCACHE){ qrCache = dict(); qrCacheN = 0; }   // 上限后整体清空，内存可控
-    var qr = qrcode(QR_TYPE, QR_EC);
-    qr.addData(text); qr.make();
-    qrCacheN++;
-    return (qrCache[key] = qr.createDataURL(cellSize, 2));
+  // 文本条件的检索目标
+  function textTargets(r, c){
+    if(!c.all) return [String(valueOfRow(r, c.field))];
+    var out = [r.item];
+    for(var n in r.v) out.push(r.v[n]);
+    return out;
+  }
+
+  var lastMissing = [];
+  function currentItems(){
+    var c = buildConds();
+    var hit = dict();
+
+    // 第一步：行级筛选（文本 / 枚举 / 非合计的数值列）
+    var rows = rawRows;
+    if(c.t.on || c.e.on || (c.n.on && !c.n.onSum)){
+      rows = rawRows.filter(function(r){
+        // 文本条件必须最先判：hit 表要如实记录「这个词在表里到底存不存在」，
+        // 否则被枚举/数值条件挡掉的行会让它被误报成「未找到」。
+        if(c.t.on){
+          var tg = textTargets(r, c.t), matched = false, i, j;
+          if(c.t.exact){
+            for(i=0;i<tg.length;i++){
+              var s = String(tg[i]).toLowerCase();
+              for(j=0;j<c.t.low.length;j++){
+                if(s === c.t.low[j]){ matched = true; hit[c.t.low[j]] = 1; }
+              }
+            }
+          }else{
+            var hay = tg.join(" ").toLowerCase();
+            for(j=0;j<c.t.low.length;j++){
+              if(hay.indexOf(c.t.low[j]) >= 0){ matched = true; hit[c.t.low[j]] = 1; }
+            }
+          }
+          if(!matched) return false;
+        }
+        if(c.e.on && String(valueOfRow(r, c.e.f)) !== c.e.val) return false;
+        if(c.n.on && !c.n.onSum){
+          var x = toNum(valueOfRow(r, c.n.f));
+          if(isNaN(x) || !cmp(x, c.n.op, c.n.val)) return false;
+        }
+        return true;
+      });
+    }
+
+    lastMissing = c.t.on ? c.t.toks.filter(function(t){ return !hit[t.toLowerCase()]; }) : [];
+
+    // 第二步：去重聚合
+    var out = aggregate(rows);
+
+    // 第三步：数量列的数值条件（比的是合计值）
+    if(c.n.on && c.n.onSum){
+      out = out.filter(function(g){ return cmp(g.qty, c.n.op, c.n.val); });
+    }
+
+    // 第四步：条数范围
+    var from = parseInt($("from").value,10), to = parseInt($("to").value,10);
+    var s = (!isNaN(from) && from>0) ? from-1 : 0;
+    var e = (!isNaN(to) && to>0) ? to : out.length;
+    return out.slice(s, e);
+  }
+
+  /* ----------------------------------------------------------- 码图生成 */
+  var symCache = dict(), symCacheN = 0;
+  function symbol(text, qrCell){
+    var kind = radio("sym");
+    var key = kind + "|" + qrCell + "|" + text;
+    if(symCache[key]) return symCache[key];
+    if(symCacheN >= MAXCACHE){ symCache = dict(); symCacheN = 0; }
+    var res;
+    try{
+      if(kind === "c128"){
+        var u = QRPCodes.code128URL(text, 30);
+        res = u ? { url:u, vec:true } : { err:"该值含 Code 128 不支持的字符" };
+      }else if(kind === "dm"){
+        var d = QRPCodes.dataMatrixURL(text, 2);
+        res = d ? { url:d, vec:true } : { err:"该值超出 DataMatrix 容量或含非 Latin-1 字符" };
+      }else{
+        var qr = qrcode(QR_TYPE, QR_EC);
+        qr.addData(text); qr.make();
+        res = { url:qr.createDataURL(qrCell, 2), vec:false };
+      }
+    }catch(err){ res = { err:"无法生成码图" }; }
+    symCacheN++;
+    return (symCache[key] = res);
   }
 
   /* ----------------------------------------------------------------- 渲染 */
@@ -3378,8 +4090,7 @@ var qrcode = function() {
         "在左侧第 1 步载入表格（任何含 Key 列的 Excel / CSV 都可以），预览会立即出现在这里。"));
       $("count").textContent = "尚无预览内容";
       setStats("—","—","—");
-      $("miss").textContent = "";
-      $("gridTip").textContent = "";
+      $("miss").textContent = ""; $("gridTip").textContent = ""; $("symTip").textContent = "";
       return;
     }
 
@@ -3393,7 +4104,7 @@ var qrcode = function() {
       stage.appendChild(emptyState("没有匹配的记录", "请放宽第 4 步的筛选条件后重试。"));
       $("count").textContent = "原始 " + rawRows.length + " 行 → 0 枚";
       setStats(rawRows.length, 0, 0);
-      $("gridTip").textContent = "";
+      $("gridTip").textContent = ""; $("symTip").textContent = "";
       return;
     }
 
@@ -3407,7 +4118,37 @@ var qrcode = function() {
     $("count").textContent = "原始 " + rawRows.length + " 行 → 去重后 " + items.length + " 枚，共 " +
       pages + " 页" + (capped ? "（预览只画前 " + MAXPREVIEW + " 枚，打印时可选全部）" : "");
     setStats(rawRows.length, items.length, pages);
+    symWarn(items, layout.symW);
     fitZoom();
+  }
+
+  // Code 128 是变长的：同一个框里 Key 越长条越细，细过阈值就扫不动，这里给出预警
+  function symWarn(items, symW){
+    var tip = $("symTip");
+    if(radio("sym") !== "c128"){
+      tip.textContent = radio("sym") === "dm"
+        ? "DataMatrix：方形，比二维码更省地方，适合小标签。仅支持 Latin-1 字符。"
+        : "二维码：容错高、可存中文，通用性最好。";
+      tip.className = "hint";
+      return;
+    }
+    var maxMod = 0, i, n;
+    for(i=0;i<items.length;i++){
+      n = QRPCodes.code128Width(items[i].item);
+      if(n === 0){ maxMod = -1; break; }
+      if(n > maxMod) maxMod = n;
+    }
+    if(maxMod < 0){
+      tip.textContent = "有 Key 含非 ASCII 字符（如中文），Code 128 无法编码，这些标签会显示错误提示。";
+      tip.className = "hint err"; return;
+    }
+    var mm = symW / maxMod;
+    tip.textContent = "条形码 Code 128：最窄条宽约 " + (Math.round(mm*1000)/1000) + " mm";
+    tip.className = "hint";
+    if(mm < MINBAR){
+      tip.textContent += "，低于 " + MINBAR + " mm，多数扫描枪会读不到。建议减少每行个数、放大码图或改用二维码 / DataMatrix。";
+      tip.className = "hint err";
+    }
   }
 
   function setStats(raw, out, pages){
@@ -3433,10 +4174,12 @@ var qrcode = function() {
 
   function qScale(){ return parseFloat(radio("qrscale")) || 1; }
   function fScale(){ return parseFloat(radio("fscale")) || 1; }
+  function isBar(){ return radio("sym") === "c128"; }
 
-  function setVars(qr, fs, gap){   // 传入的已是最终尺寸
+  function setVars(symW, symH, fs, gap){   // 传入的已是最终尺寸（mm）
     var st = document.documentElement.style;
-    st.setProperty("--qr", Math.round(qr*10)/10 + "mm");
+    st.setProperty("--symw", Math.round(symW*10)/10 + "mm");
+    st.setProperty("--symh", Math.round(symH*10)/10 + "mm");
     fs = Math.round(fs*100)/100;
     st.setProperty("--fs", fs+"mm");
     st.setProperty("--fs2", Math.round(fs*0.82*100)/100+"mm");
@@ -3454,26 +4197,43 @@ var qrcode = function() {
     var fs = Math.max(2.2, Math.round(Math.min(qr*0.13, cw*0.10)*fScale()*100)/100);
     var gap = Math.max(1.2, Math.round(qr*0.06*10)/10);
     var fs2 = fs*0.82;
-    // 单元格高度 = 二维码 + 间距 + 文本行 + 上下内边距，所有格统一
-    var cellH = Math.round((qr + gap + fs*1.25 + descLines*fs2*1.2 +
+
+    var symW = qr, symH = qr;
+    if(isBar()){
+      // 一维码横向铺满、纵向压扁：宽尽量大，高约为宽的 1/3
+      symW = Math.floor(Math.min(cw-2.5, cw*0.94*qScale())*10)/10;
+      symH = Math.max(5, Math.round(symW/3.2*10)/10);
+    }
+    // 单元格高度 = 码图 + 间距 + 文本行 + 上下内边距，所有格统一
+    var cellH = Math.round((symH + gap + fs*1.25 + descLines*fs2*1.2 +
                             (hasRest ? fs2*1.25 : 0) + 3) * 10)/10;
     var rows = Math.max(1, Math.floor(PH / cellH));
-    return { cw:cw, qr:qr, fs:fs, gap:gap, cellH:cellH, rows:rows, perPage:cols_*rows };
+    return { cw:cw, qr:qr, symW:symW, symH:symH, fs:fs, gap:gap,
+             cellH:cellH, rows:rows, perPage:cols_*rows };
   }
 
   // 「自动」每行个数：在字号还认得清、Key 两行以内放得下的前提下尽量排密
   function autoCols(items, sel){
-    var maxKey = 0;
-    for(var i=0;i<items.length;i++){
+    var maxKey = 0, i;
+    for(i=0;i<items.length;i++){
       if(items[i].item.length > maxKey) maxKey = items[i].item.length;
     }
-    var cand = [8,6,4,2,1];
+    // 一维码要横向空间，密排会让条宽细到扫不动，候选值收窄
+    var cand = isBar() ? [4,2,1] : [8,6,4,2,1];
     for(var j=0;j<cand.length;j++){
       var c = cand[j];
-      if(sel.length >= 2 && c > 6) continue;          // 字段多，别排太密
+      if(sel.length >= 2 && c > 6) continue;                   // 字段多，别排太密
       var m = a4Metrics(c, sel);
-      if(m.fs < 2.55) continue;                       // 字太小，扫得到也看不清
-      if(maxKey * 0.58 * m.fs > (m.cw - 2.5) * 2) continue;   // Key 两行放不下
+      if(m.fs < 2.55) continue;                                // 字太小，扫得到也看不清
+      if(maxKey * 0.58 * m.fs > (m.cw - 2.5) * 2) continue;    // Key 两行放不下
+      if(isBar()){
+        var mods = 0;
+        for(i=0;i<items.length;i++){
+          var n = QRPCodes.code128Width(items[i].item);
+          if(n > mods) mods = n;
+        }
+        if(mods > 0 && m.symW / mods < MINBAR) continue;       // 条太细，扫不动
+      }
       return c;
     }
     return 1;
@@ -3481,10 +4241,7 @@ var qrcode = function() {
 
   function colsValue(items, sel){
     var v = $("cols").value;
-    if(v === "auto"){
-      var c = autoCols(items, sel);
-      return { cols:c, auto:true };
-    }
+    if(v === "auto") return { cols:autoCols(items, sel), auto:true };
     return { cols:parseInt(v,10) || 4, auto:false };
   }
 
@@ -3494,7 +4251,7 @@ var qrcode = function() {
     var cols_ = pick.cols;
     var m = a4Metrics(cols_, sel);
 
-    setVars(m.qr, m.fs, m.gap);
+    setVars(m.symW, m.symH, m.fs, m.gap);
     setPageStyle("@page{ size:A4; margin:8mm; }");
     $("gridTip").textContent = (pick.auto ? "自动：" : "") +
       cols_ + " 个/行 × " + m.rows + " 行 = 每页 " + m.perPage + " 枚";
@@ -3517,7 +4274,7 @@ var qrcode = function() {
       }
       page.appendChild(grid); stage.appendChild(page);
     }
-    return { perPage:m.perPage };
+    return { perPage:m.perPage, symW:m.symW };
   }
 
   function renderLabels(stage, items){
@@ -3531,7 +4288,13 @@ var qrcode = function() {
     if(qr > qrMax) qr = Math.floor(qrMax*10)/10;
     if(qr < 8) qr = Math.max(8, Math.min(w,h)-4);
     var fs = Math.max(1.9, Math.round(Math.min(qr*0.14, w*0.085)*fScale()*100)/100);
-    setVars(qr, fs, Math.max(1, Math.round(qr*0.06*10)/10));
+
+    var symW = qr, symH = qr;
+    if(isBar()){
+      symW = Math.floor(Math.min(w-2.5, w*0.94*qScale())*10)/10;
+      symH = Math.max(4, Math.round(Math.min(symW/3.2, h-textH-2)*10)/10);
+    }
+    setVars(symW, symH, fs, Math.max(1, Math.round(qr*0.06*10)/10));
     setPageStyle("@page{ size:"+w+"mm "+h+"mm; margin:0; }");
     $("gridTip").textContent = "";
 
@@ -3542,7 +4305,7 @@ var qrcode = function() {
       lbl.appendChild(makeCell(it, 6)); wrap.appendChild(lbl);
     });
     stage.appendChild(wrap);
-    return { perPage:1 };   // 标签纸一枚一页
+    return { perPage:1, symW:symW };   // 标签纸一枚一页
   }
 
   function valOf(r, o){ return o.isQty ? fmtQty(r.qty) : (r.v[o.name] || ""); }
@@ -3553,17 +4316,19 @@ var qrcode = function() {
     return s.slice(0, n);
   }
 
-  function makeCell(r, cellSize){
+  function makeCell(r, qrCell){
     var d = document.createElement("div"); d.className = "cell";
-    try{
+    var sym = symbol(r.item, qrCell);        // 码图内容 = Key
+    if(sym.url){
       var img = document.createElement("img");
-      img.src = qrDataURL(r.item, cellSize);   // 二维码内容 = Key
+      img.src = sym.url;
+      if(sym.vec) img.className = "vec";
       img.alt = r.item;
       d.appendChild(img);
-    }catch(err){
+    }else{
       var bad = document.createElement("div");
       bad.className = "bad";
-      bad.textContent = "[该值无法生成二维码]";
+      bad.textContent = "[" + (sym.err || "无法生成码图") + "]";
       d.appendChild(bad);
     }
 
@@ -3633,7 +4398,6 @@ var qrcode = function() {
       if(all){
         setStatus("正在渲染全部 " + n + " 枚…", "warn");
         fullRender = true;
-        // 让状态先刷出来，再做重活
         setTimeout(function(){
           try{ render(); window.print(); }
           finally{ fullRender = false; setStatus("已读取 " + rawRows.length + " 行", "ok"); render(); }
@@ -3644,7 +4408,7 @@ var qrcode = function() {
     window.print();
   }
 
-  /* ---------------------------------------------------------- 移动端抽屉 */
+  /* ------------------------------------------------- 面板：左右 / 上下折叠 */
   function isMobile(){ return window.matchMedia("(max-width:900px)").matches; }
   function openDrawer(){
     if(!isMobile()) return;
@@ -3664,6 +4428,29 @@ var qrcode = function() {
   $("doneBtn").addEventListener("click", closeDrawer);
   document.addEventListener("keydown", function(e){ if(e.key === "Escape") closeDrawer(); });
   window.addEventListener("resize", function(){ if(!isMobile()) closeDrawer(); });
+
+  // 左右折叠：整条侧栏收起，预览铺满
+  function setRail(on){
+    $("app").classList.toggle("is-rail", on);
+    $("railBtn").setAttribute("aria-expanded", on ? "false" : "true");
+    setTimeout(function(){ fitZoom(); }, 0);
+  }
+  $("railBtn").addEventListener("click", function(){ setRail(true); });
+  $("railOpenBtn").addEventListener("click", function(){ setRail(false); });
+
+  // 上下折叠：一键全部展开 / 收起
+  var SECTS = ["sect1","sect2","sect3","sect4"];
+  $("foldBtn").addEventListener("click", function(){
+    var anyOpen = SECTS.some(function(id){ return $(id).open; });
+    SECTS.forEach(function(id){ $(id).open = !anyOpen; });
+    this.textContent = anyOpen ? "全部展开" : "全部收起";
+  });
+  SECTS.forEach(function(id){
+    $(id).addEventListener("toggle", function(){
+      var anyOpen = SECTS.some(function(s){ return $(s).open; });
+      $("foldBtn").textContent = anyOpen ? "全部收起" : "全部展开";
+    });
+  });
 
   /* ------------------------------------------------------------- 预览缩放 */
   var STEPS = [0.2,0.25,0.3,0.4,0.5,0.65,0.8,1,1.25,1.5,2];
@@ -3723,15 +4510,30 @@ var qrcode = function() {
     resetZoom();
     render();
   });
-  ["cols","cutline","cw","ch","dlines","whsFilter","stockFilter"]
+  ["cols","cutline","cw","ch","dlines","tField"]
     .forEach(function(id){ $(id).addEventListener("change", render); });
-  ["qrscale","fscale","kwmode"].forEach(function(name){
+  ["qrscale","fscale","kwmode","sym"].forEach(function(name){
     Array.prototype.forEach.call(document.querySelectorAll('input[name="'+name+'"]'), function(el){
       el.addEventListener("change", render);
     });
   });
-  ["kw","from","to","dchars"].forEach(function(id){
+  ["kw","from","to","dchars","nValue"].forEach(function(id){
     $(id).addEventListener("input", debounce(render, 400));
+  });
+  $("eField").addEventListener("change", function(){ onEnumFieldChange(); render(); });
+  $("eValue").addEventListener("change", render);
+  $("nField").addEventListener("change", function(){ onNumFieldChange(); render(); });
+  $("nOp").addEventListener("change", render);
+  $("chipsToggle").addEventListener("click", function(){
+    chipsExpanded = !chipsExpanded; refreshChips();
+  });
+  $("clearFilterBtn").addEventListener("click", function(){
+    $("kw").value = ""; $("tField").value = "__all__";
+    document.querySelector('input[name="kwmode"][value="fuzzy"]').checked = true;
+    $("eField").value = ""; onEnumFieldChange();
+    $("nField").value = ""; $("nValue").value = ""; onNumFieldChange();
+    $("from").value = ""; $("to").value = "";
+    render();
   });
   $("applyBtn").addEventListener("click", function(){ render(); closeDrawer(); });
   $("printBtn").addEventListener("click", doPrint);
@@ -3765,7 +4567,7 @@ var qrcode = function() {
   function debounce(fn, ms){ var t; return function(){ clearTimeout(t); t = setTimeout(fn, ms); }; }
 
   applyZoom(1);
-  render();                                    // 首屏空状态
+  render();                                          // 首屏空状态
   if(isMobile()) openDrawer(); else closeDrawer();   // 手机上先把第 1 步露出来
 })();
 </script>
