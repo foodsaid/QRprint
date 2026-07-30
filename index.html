@@ -9,10 +9,13 @@
 <!-- 站点图标：内联 SVG，不产生任何网络请求（CSP 的 img-src data: 已放行） -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5fe0'/%3E%3Cg fill='%23fff'%3E%3Crect x='6' y='6' width='9' height='9' rx='1.5'/%3E%3Crect x='17' y='6' width='9' height='9' rx='1.5'/%3E%3Crect x='6' y='17' width='9' height='9' rx='1.5'/%3E%3Crect x='17' y='17' width='4' height='4' rx='1'/%3E%3Crect x='22' y='22' width='4' height='4' rx='1'/%3E%3C/g%3E%3Cg fill='%232f5fe0'%3E%3Crect x='9' y='9' width='3' height='3'/%3E%3Crect x='20' y='9' width='3' height='3'/%3E%3Crect x='9' y='20' width='3' height='3'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5fe0'/%3E%3Cg fill='%23fff'%3E%3Crect x='6' y='6' width='9' height='9' rx='1.5'/%3E%3Crect x='17' y='6' width='9' height='9' rx='1.5'/%3E%3Crect x='6' y='17' width='9' height='9' rx='1.5'/%3E%3Crect x='17' y='17' width='4' height='4' rx='1'/%3E%3Crect x='22' y='22' width='4' height='4' rx='1'/%3E%3C/g%3E%3Cg fill='%232f5fe0'%3E%3Crect x='9' y='9' width='3' height='3'/%3E%3Crect x='20' y='9' width='3' height='3'/%3E%3Crect x='9' y='20' width='3' height='3'/%3E%3C/g%3E%3C/svg%3E">
-<!-- 安全策略：禁止一切外部/网络访问；脚本样式全部内联，图片仅允许本地生成的 data: 二维码。
-     表格数据全程留在本机浏览器内存中，既不上传也不落盘。 -->
+<!-- 安全策略：禁止一切外部/网络访问；脚本样式全部内联，图片仅允许本地生成的 data: 码图。
+     表格数据全程留在本机浏览器内存中，既不上传也不落盘。
+     require-trusted-types-for：本页不存在任何 innerHTML/outerHTML 写入，开启后
+     即使将来误加一处把单元格内容当 HTML 写入的代码，也会被浏览器直接拦下。 -->
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'">
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'; manifest-src 'none'; worker-src 'none'; require-trusted-types-for 'script'">
+<meta name="referrer" content="no-referrer">
 <title>QRprint · Excel 批量二维码标签打印</title>
 <style>
 /* =====================================================================
@@ -3589,6 +3592,8 @@ var QRPCodes = (function(){
   var MAXFILE    = 60*1024*1024;  // 单个文件大小上限 60MB
   var MAXCACHE   = 8000;          // 码图缓存上限，防止内存无限增长
   var MAXTEXT    = 300;           // 单格文本最大字符数，防止异常长内容撑破版面
+  var MAXCOLS    = 256;           // 单表最多处理多少列
+  var MAXCELLS   = 3000000;       // 单表最多展开多少个单元格（见 clampRange）
   var MAXFIELDS  = 6;             // 标签上最多显示几个可选字段（再多就挤不下了）
   var CHIPVIS    = 8;             // 字段胶囊默认露出几个，其余折叠
   var MAXENUM    = 300;           // 超过这么多不同取值就不当枚举列
@@ -3665,7 +3670,7 @@ var QRPCodes = (function(){
         if(rawRows.length===0) throw new Error("没有解析到任何数据行");
         setStatus("已读取 " + rawRows.length + " 行" +
                   (keyFallback ? "（未识别到 Key 列，已用第 1 列）" : "") +
-                  (truncated ? "（已达 "+MAXROWS+" 行上限）" : ""),
+                  (truncated ? "（表格过大，已按上限截断）" : ""),
                   (truncated || keyFallback) ? "warn" : "ok");
         chipsExpanded = false;
         buildFieldBox();
@@ -3709,6 +3714,23 @@ var QRPCodes = (function(){
     };
   }
 
+  // sheet_to_json 会按 !ref 声明的矩形整个铺开，跟真正有几个单元格无关。
+  // 一个几 KB 的 xlsx 可以声明 A1:XFD1048576（170 亿格），足以把标签页拖死，
+  // 所以展开前先把范围夹到预算之内。这是纯防御性裁剪，正常文件不会被触碰。
+  function clampRange(ws){
+    if(!ws || !ws["!ref"]) return false;
+    var r;
+    try{ r = XLSX.utils.decode_range(ws["!ref"]); }catch(e){ return false; }
+    var cols_ = r.e.c - r.s.c + 1, rows_ = r.e.r - r.s.r + 1;
+    if(!(cols_ > 0) || !(rows_ > 0)) return false;
+    var hit = false;
+    if(cols_ > MAXCOLS){ r.e.c = r.s.c + MAXCOLS - 1; cols_ = MAXCOLS; hit = true; }
+    var maxRows = Math.max(1, Math.floor(MAXCELLS / cols_));
+    if(rows_ > maxRows){ r.e.r = r.s.r + maxRows - 1; hit = true; }
+    if(hit) ws["!ref"] = XLSX.utils.encode_range(r);
+    return hit;
+  }
+
   function parseWorkbook(wb){
     cols = []; rawRows = [];
     var seen = dict(), stats = dict(), keyStat = newStat();
@@ -3716,6 +3738,7 @@ var QRPCodes = (function(){
 
     wb.SheetNames.forEach(function(sn){
       if(rawRows.length >= MAXROWS){ truncated = true; return; }
+      if(clampRange(wb.Sheets[sn])) truncated = true;
       var aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:""});
       var info = locateHeader(aoa); if(!info) return;
       if(info.fallback) keyFallback = true;
@@ -3724,7 +3747,8 @@ var QRPCodes = (function(){
       var idxList = [];                       // [[列号, 列名]]
       for(var c=0;c<hdr.length;c++){
         if(c === cm.item) continue;
-        var name = String(hdr[c]).trim() || ("列"+(c+1));
+        // 表头同样要截断：恶意文件可以放一个几 MB 的列名把界面撑爆
+        var name = clip(String(hdr[c]).trim()) || ("列"+(c+1));
         idxList.push([c, name]);
         if(!seen[name]){
           seen[name]=1;
@@ -4213,15 +4237,29 @@ var QRPCodes = (function(){
     $("statPages").textContent = String(pages);
   }
 
+  // 全部用 DOM 节点构建，不使用 innerHTML —— 这样整页没有一处 HTML 写入沉降点，
+  // CSP 的 require-trusted-types-for 才能真正开起来。
   function emptyState(title, sub){
+    var NS = "http://www.w3.org/2000/svg";
     var d = document.createElement("div"); d.className = "empty";
-    d.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"' +
-      ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<rect x="3" y="3" width="7" height="7" rx="1"></rect>' +
-      '<rect x="14" y="3" width="7" height="7" rx="1"></rect>' +
-      '<rect x="3" y="14" width="7" height="7" rx="1"></rect>' +
-      '<path d="M14 14h3v3h-3zM20 14v.01M20 20v.01M17 20v.01"></path></svg>';
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    [[3,3],[14,3],[3,14]].forEach(function(p){
+      var rc = document.createElementNS(NS, "rect");
+      rc.setAttribute("x", p[0]); rc.setAttribute("y", p[1]);
+      rc.setAttribute("width", "7"); rc.setAttribute("height", "7"); rc.setAttribute("rx", "1");
+      svg.appendChild(rc);
+    });
+    var pa = document.createElementNS(NS, "path");
+    pa.setAttribute("d", "M14 14h3v3h-3zM20 14v.01M20 20v.01M17 20v.01");
+    svg.appendChild(pa);
+    d.appendChild(svg);
     var t = document.createElement("div"); t.className = "t"; t.textContent = title;
     var s = document.createElement("div"); s.className = "s"; s.textContent = sub;
     d.appendChild(t); d.appendChild(s);
