@@ -6,6 +6,9 @@
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="免安装的 Excel 批量二维码标签打印工具。纯前端运行，数据不出本机浏览器。">
 <meta name="theme-color" content="#2f5fe0">
+<!-- 站点图标：内联 SVG，不产生任何网络请求（CSP 的 img-src data: 已放行） -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5fe0'/%3E%3Cg fill='%23fff'%3E%3Crect x='6' y='6' width='9' height='9' rx='1.5'/%3E%3Crect x='17' y='6' width='9' height='9' rx='1.5'/%3E%3Crect x='6' y='17' width='9' height='9' rx='1.5'/%3E%3Crect x='17' y='17' width='4' height='4' rx='1'/%3E%3Crect x='22' y='22' width='4' height='4' rx='1'/%3E%3C/g%3E%3Cg fill='%232f5fe0'%3E%3Crect x='9' y='9' width='3' height='3'/%3E%3Crect x='20' y='9' width='3' height='3'/%3E%3Crect x='9' y='20' width='3' height='3'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5fe0'/%3E%3Cg fill='%23fff'%3E%3Crect x='6' y='6' width='9' height='9' rx='1.5'/%3E%3Crect x='17' y='6' width='9' height='9' rx='1.5'/%3E%3Crect x='6' y='17' width='9' height='9' rx='1.5'/%3E%3Crect x='17' y='17' width='4' height='4' rx='1'/%3E%3Crect x='22' y='22' width='4' height='4' rx='1'/%3E%3C/g%3E%3Cg fill='%232f5fe0'%3E%3Crect x='9' y='9' width='3' height='3'/%3E%3Crect x='20' y='9' width='3' height='3'/%3E%3Crect x='9' y='20' width='3' height='3'/%3E%3C/g%3E%3C/svg%3E">
 <!-- 安全策略：禁止一切外部/网络访问；脚本样式全部内联，图片仅允许本地生成的 data: 二维码。
      表格数据全程留在本机浏览器内存中，既不上传也不落盘。 -->
 <meta http-equiv="Content-Security-Policy"
@@ -26,6 +29,10 @@
 
 /* ---------------------------------------------------------------- 设计变量 */
 :root{
+  /* 必须显式声明，且要跟当前主题一致：否则原生 <select> 弹出层的底色交给系统决定，
+     系统深色时会出现「深底 + 深字」，下拉整片看起来是空白的。 */
+  color-scheme: light;
+
   --bg:            #eceff4;
   --surface:       #ffffff;
   --surface-2:     #f6f8fb;
@@ -64,6 +71,7 @@
 
 @media (prefers-color-scheme: dark){
   :root{
+    color-scheme: dark;
     --bg:#0e1319; --surface:#161c24; --surface-2:#1b222b; --surface-3:#212a34;
     --border:#28313c; --border-strong:#3a4553;
     --text:#eef2f7; --text-2:#a9b4c2; --text-3:#76828f;
@@ -76,6 +84,7 @@
   }
 }
 :root[data-theme="dark"]{
+  color-scheme: dark;
   --bg:#0e1319; --surface:#161c24; --surface-2:#1b222b; --surface-3:#212a34;
   --border:#28313c; --border-strong:#3a4553;
   --text:#eef2f7; --text-2:#a9b4c2; --text-3:#76828f;
@@ -87,6 +96,7 @@
   --topbar-sh: 0 1px 0 var(--border), 0 6px 18px rgba(0,0,0,.5);
 }
 :root[data-theme="light"]{
+  color-scheme: light;
   --bg:#eceff4; --surface:#ffffff; --surface-2:#f6f8fb; --surface-3:#eef1f6;
   --border:#e3e7ee; --border-strong:#ccd3dd;
   --text:#10151c; --text-2:#4d5764; --text-3:#8b95a3;
@@ -197,11 +207,11 @@ code{
 }
 .scrim{ display:none; }
 
-/* 左右折叠：侧栏收起，预览占满整宽 */
+/* 左右折叠：侧栏收起，预览占满整宽。开关是顶栏最左那一个，收/放都点它 */
 .app.is-rail .shell{ grid-template-columns:minmax(0,1fr); }
 .app.is-rail .sidebar{ display:none; }
-.rail-only{ display:none !important; }
-.app.is-rail .rail-only{ display:inline-flex !important; }
+#railBtn svg{ transition:transform .18s ease; }
+.app.is-rail #railBtn{ color:var(--accent); border-color:var(--accent-border); background:var(--accent-soft); }
 
 /* ---------------------------------------------------------------- 侧栏 */
 .sidebar{
@@ -231,6 +241,10 @@ code{
   transform:rotate(45deg) translate(-2px,-2px); transition:transform .18s ease;
 }
 .sect[open] > .sect-hd::after{ transform:rotate(-135deg) translate(-2px,-2px); }
+.badge{
+  padding:1px 7px; border-radius:999px; font-size:10.5px; font-weight:700;
+  background:var(--accent); color:var(--accent-ink);
+}
 .sect-hd:hover{ color:var(--accent); }
 .sect-hd:hover::after{ border-color:var(--accent); }
 .step{
@@ -290,6 +304,8 @@ select{
   background-size:5px 5px, 5px 5px; background-repeat:no-repeat;
 }
 select.op{ padding-right:9px; background-image:none; }
+/* 明确给选项上色，别让原生弹出层去继承透明背景（会变成看不见的白字/黑字） */
+option{ background:var(--surface); color:var(--text); }
 textarea{ resize:vertical; min-height:44px; line-height:1.45; }
 select:focus, input:focus, textarea:focus{
   outline:none; border-color:var(--accent);
@@ -538,6 +554,16 @@ select:disabled, input:disabled, textarea:disabled{
 
   <!-- ============================================================ 顶栏 -->
   <header class="topbar no-print">
+    <!-- 唯一的左右折叠开关，固定在最左边；收起/展开都点这一个 -->
+    <button class="btn ghost icon only-desktop" id="railBtn" type="button"
+            title="折叠 / 展开设置面板" aria-label="折叠设置面板" aria-expanded="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+        <path d="M9 4v16"></path>
+      </svg>
+    </button>
+
     <button class="btn ghost icon only-mobile" id="menuBtn" type="button" aria-label="打开设置面板" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
@@ -558,15 +584,6 @@ select:disabled, input:disabled, textarea:disabled{
         <p>Excel 批量二维码标签打印 · 纯前端 · 数据不出本机</p>
       </div>
     </div>
-
-    <button class="btn ghost icon only-desktop" id="railBtn" type="button"
-            title="折叠 / 展开设置面板" aria-label="折叠设置面板" aria-expanded="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
-        <path d="M9 4v16"></path>
-      </svg>
-    </button>
 
     <span class="spacer"></span>
 
@@ -646,6 +663,13 @@ select:disabled, input:disabled, textarea:disabled{
               <span id="fieldBox" class="chips-in"></span>
             </div>
             <p class="hint" id="fieldHint">载入文件后，其余列会全部列在这里。勾选的字段同时参与去重。</p>
+          </div>
+
+          <div class="field">
+            <label for="sumField">合计字段（去重时把该列相加，不选则该列参与去重）</label>
+            <select id="sumField">
+              <option value="">不启用</option>
+            </select>
           </div>
 
           <div class="field-row">
@@ -751,7 +775,7 @@ select:disabled, input:disabled, textarea:disabled{
 
       <!-- ④ 筛选：三个通用条件，全部按「与」组合 -->
       <details class="sect" id="sect4" open>
-        <summary class="sect-hd"><span class="step">4</span>筛选范围</summary>
+        <summary class="sect-hd"><span class="step">4</span>筛选范围<span class="badge hide" id="filterBadge"></span></summary>
         <div class="sect-bd">
 
           <!-- 条件一：文本 -->
@@ -843,14 +867,6 @@ select:disabled, input:disabled, textarea:disabled{
     <!-- ======================================================== 预览区 -->
     <section class="canvas">
       <div class="canvas-bar no-print">
-        <button class="btn ghost icon only-desktop rail-only" id="railOpenBtn" type="button"
-                title="展开设置面板" aria-label="展开设置面板">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
-            <path d="M9 4v16"></path>
-          </svg>
-        </button>
         <span id="count" class="count">尚无预览内容</span>
         <span class="spacer"></span>
         <div class="zoom">
@@ -3586,22 +3602,22 @@ var QRPCodes = (function(){
 
   // 表头别名（大小写/空格/点/下划线/括号 无关）
   //   key  —— 码图内容列，必需；认不出时退回第 1 列
-  //   desc —— 默认勾选的描述列
-  //   qty  —— 会自动求和的数量列
-  // 仓库不再特殊对待：它已经被通用的「枚举筛选」覆盖。
+  //   desc —— 默认勾选的描述列（只是个默认勾选，用户随时可改）
+  // 仓库、库存都不再特殊对待：
+  //   仓库 → 已被通用的「枚举筛选」覆盖；
+  //   库存 → 改成用户自己在「合计字段」里选，不再按表头名字硬猜要不要求和。
   var ALIAS = {
     item : ["key","itemno","itemcode","itemnumber","itemid","code","id","no","number",
             "barcode","sn","serialno","partno","partnumber",
             "物料号","物料编号","物料代码","项目编号","品番","料号","编码","编号","代码",
             "条码","条形码","序列号","关键字","主键"],
     desc : ["itemdescription","description","itemname","name","title",
-            "物料描述","描述","品名","物料名称","名称","标题","说明"],
-    qty  : ["instock","stock","onhand","qty","quantity","库存","现有量","在库","库存量","数量"]
+            "物料描述","描述","品名","物料名称","名称","标题","说明"]
   };
 
-  var cols = [];        // [{name, isQty, isDesc, isEnum, isNum, values[]}] 除 Key 外的全部列
+  var cols = [];        // [{name, isDesc, isEnum, isNum, values[]}] 除 Key 外的全部列
   var keyCol = null;    // Key 列自身的统计
-  var rawRows = [];     // [{item, qty, v:{列名:值}}]
+  var rawRows = [];     // [{item, v:{列名:值}}]  聚合后的组还会多一个 sum
   var truncated = false;
   var keyFallback = false;
   var fullRender = false;
@@ -3684,8 +3700,8 @@ var QRPCodes = (function(){
       return a < b ? -1 : (a > b ? 1 : 0);
     });
     return {
-      // 枚举列：取值有限且确实有重复
-      isEnum: !st.dvOver && st.dvN > 0 && st.dvN < st.nonEmpty,
+      // 枚举列：至少 2 种取值、有限、且确实有重复（只有 1 种取值的列筛了也没意义）
+      isEnum: !st.dvOver && st.dvN >= 2 && st.dvN < st.nonEmpty,
       // 数值列：非空值里八成以上能当数字
       isNum:  st.nonEmpty > 0 && st.numeric / st.nonEmpty >= 0.8,
       values: vals,
@@ -3705,16 +3721,15 @@ var QRPCodes = (function(){
       if(info.fallback) keyFallback = true;
       var cm = info.colMap, hdr = aoa[info.headerRow] || [];
 
-      var idxList = [];                       // [[列号, 列名, isQty]]
+      var idxList = [];                       // [[列号, 列名]]
       for(var c=0;c<hdr.length;c++){
         if(c === cm.item) continue;
         var name = String(hdr[c]).trim() || ("列"+(c+1));
-        var isQty = (c === cm.qty);
-        idxList.push([c, name, isQty]);
+        idxList.push([c, name]);
         if(!seen[name]){
           seen[name]=1;
           stats[name] = newStat();
-          cols.push({name:name, isQty:isQty, isDesc:(c===cm.desc)});
+          cols.push({name:name, isDesc:(c===cm.desc)});
         }
       }
 
@@ -3724,26 +3739,31 @@ var QRPCodes = (function(){
         var item = clip(String(cellv(row, cm.item)).trim());
         if(item==="") continue;
         feedStat(keyStat, item);
-        var v = dict(), qty = 0;
+        var v = dict();
         idxList.forEach(function(p){
           var val = cellv(row, p[0]);
           var s = clip((typeof val==="number") ? String(val) : val);
           v[p[1]] = s;
           if(stats[p[1]]) feedStat(stats[p[1]], s);
-          if(p[2]) qty = num(val);
         });
-        rawRows.push({ item:item, qty:qty, v:v });
+        rawRows.push({ item:item, v:v });
       }
     });
 
     cols.forEach(function(o){
       var f = finishStat(stats[o.name] || newStat());
-      o.isEnum = f.isEnum; o.isNum = f.isNum; o.values = f.values;
+      o.isEnum = f.isEnum; o.isNum = f.isNum; o.values = f.values; o.nonEmpty = f.nonEmpty;
     });
+    // 整列都是空的（导出表里常见的占位列，如 abc / de / af）就别占地方了
+    cols = cols.filter(function(o){ return o.nonEmpty > 0; });
     var kf = finishStat(keyStat);
-    keyCol = { name:"Key", isKey:true, isQty:false,
+    keyCol = { name:"Key", isKey:true,
                isEnum:kf.isEnum, isNum:kf.isNum, values:kf.values };
   }
+
+  // 「合计字段」完全由用户选，不再按表头名字硬猜。返回列名或 ""。
+  function sumColName(){ return $("sumField").value || ""; }
+  function isSumCol(o){ return !!o && !o.isKey && o.name === sumColName(); }
 
   // 先按别名找 Key 列；找不到就退回「前 30 行里第一行有 ≥2 个非空单元格的行」作表头、第 1 列作 Key
   function locateHeader(aoa){
@@ -3786,7 +3806,7 @@ var QRPCodes = (function(){
       cb.addEventListener("change", onFieldToggle);
       lab.appendChild(cb);
       lab.appendChild(document.createTextNode(o.name));
-      if(o.isQty){
+      if(isSumCol(o)){
         var s = document.createElement("span");
         s.className = "sub"; s.textContent = "·合计"; lab.appendChild(s);
       }
@@ -3801,6 +3821,16 @@ var QRPCodes = (function(){
     var shown = 0, hidden = 0;
     chips.forEach(function(lab){
       var cb = lab.querySelector("input");
+      // 「·合计」角标要跟着「合计字段」的选择走，所以每次都重算一遍
+      var o = cols[parseInt(cb.getAttribute("data-idx"),10)];
+      var tag = lab.querySelector(".sub");
+      if(isSumCol(o) && !tag){
+        tag = document.createElement("span");
+        tag.className = "sub"; tag.textContent = "·合计";
+        lab.appendChild(tag);
+      }else if(!isSumCol(o) && tag){
+        lab.removeChild(tag);
+      }
       var mustShow = cb.checked || chipsExpanded;
       if(mustShow || shown < CHIPVIS){ lab.classList.remove("extra"); shown++; }
       else { lab.classList.add("extra"); hidden++; }
@@ -3847,22 +3877,29 @@ var QRPCodes = (function(){
   }
 
   /* ------------------------ 聚合（按 Key + 已勾选字段去重；数量列自动合计） */
-  // 说明：显示出来的列要么参与了去重（组内取值必然相同），要么是会被合计的数量列，
+  // 显示出来的列要么参与了去重（组内取值必然相同），要么是用户指定的合计列，
   // 所以这里不需要再做「多值合并」——原先针对仓库的特判已经不必要了。
+  // 分隔符用 \u0000：单元格文本里不可能出现，避免 "A B"+"C" 与 "A"+"B C" 撞成同一个键。
+  var KEYSEP = "\u0000";
   function aggregate(rows){
     var sel = checkedCols();
-    var keyCols = sel.filter(function(o){ return !o.isQty; });
+    var sumName = sumColName();
+    // 合计列不参与去重（它要被相加），其余勾选字段都是去重键
+    var keyCols = sel.filter(function(o){ return o.name !== sumName; });
     var map = dict(), out = [];
     rows.forEach(function(r){
       var k = [r.item];
       keyCols.forEach(function(o){ k.push(r.v[o.name]||""); });
-      var key = k.join(" ");
+      var key = k.join(KEYSEP);
       var g = map[key];
       if(!g){
-        g = { item:r.item, qty:0, v:r.v };
+        g = { item:r.item, sum:0, v:r.v };
         map[key] = g; out.push(g);
       }
-      g.qty += r.qty;
+      if(sumName){
+        var x = toNum(r.v[sumName]);
+        if(!isNaN(x)) g.sum += x;
+      }
     });
     return out;
   }
@@ -3909,6 +3946,11 @@ var QRPCodes = (function(){
     fillFieldSelect($("eField"), enums, "不启用", "");
     fillFieldSelect($("nField"), nums, "不启用", "");
 
+    // 合计字段只列普通数值列（Key 不可能是合计对象），默认不启用
+    var sums = [];
+    cols.forEach(function(o){ if(o.isNum) sums.push([o.name, o.name]); });
+    fillFieldSelect($("sumField"), sums, "不启用", "");
+
     $("enumCond").classList.toggle("hide", enums.length === 0);
     $("numCond").classList.toggle("hide", nums.length === 0);
     onEnumFieldChange();
@@ -3943,7 +3985,7 @@ var QRPCodes = (function(){
     $("nValue").disabled = !on;
     $("numCond").classList.toggle("is-off", !on);
     $("numTip").textContent = on
-      ? ("比较「" + f.name + "」" + (f.isQty ? "（去重后的合计值）" : "（原始行的值）"))
+      ? ("比较「" + f.name + "」" + (isSumCol(f) ? "（去重后的合计值）" : "（原始行的值）"))
       : "";
   }
 
@@ -3985,7 +4027,7 @@ var QRPCodes = (function(){
     var nf = fieldOf($("nField").value), nv = toNum($("nValue").value);
     if(nf && !isNaN(nv)){
       c.n.on = true; c.n.f = nf; c.n.op = $("nOp").value; c.n.val = nv;
-      c.n.onSum = !!nf.isQty;                        // 数量列比的是合计值，聚合后再判
+      c.n.onSum = isSumCol(nf);                      // 合计列比的是合计值，聚合后再判
     }
     return c;
   }
@@ -4040,9 +4082,9 @@ var QRPCodes = (function(){
     // 第二步：去重聚合
     var out = aggregate(rows);
 
-    // 第三步：数量列的数值条件（比的是合计值）
+    // 第三步：合计列的数值条件（比的是聚合后的合计值）
     if(c.n.on && c.n.onSum){
-      out = out.filter(function(g){ return cmp(g.qty, c.n.op, c.n.val); });
+      out = out.filter(function(g){ return cmp(g.sum, c.n.op, c.n.val); });
     }
 
     // 第四步：条数范围
@@ -4078,9 +4120,23 @@ var QRPCodes = (function(){
   }
 
   /* ----------------------------------------------------------------- 渲染 */
+  // 第 4 步的标题上挂一个角标，收起面板时也能一眼看出「现在有筛选生效」，
+  // 免得对不上数还以为是解析出了问题
+  function updateFilterBadge(){
+    var n = 0;
+    if(kwTokens().length) n++;
+    if($("eField").value && $("eValue").value !== "__all__") n++;
+    if($("nField").value && !isNaN(toNum($("nValue").value))) n++;
+    if($("from").value !== "" || $("to").value !== "") n++;
+    var b = $("filterBadge");
+    b.textContent = n ? (n + " 个条件生效") : "";
+    b.classList.toggle("hide", n === 0);
+  }
+
   function render(){
     var stage = $("stage");
     stage.textContent = "";
+    updateFilterBadge();
     var sel = checkedCols();
     $("dlines").disabled = $("dchars").disabled = (sel.length===0);
 
@@ -4308,7 +4364,7 @@ var QRPCodes = (function(){
     return { perPage:1, symW:symW };   // 标签纸一枚一页
   }
 
-  function valOf(r, o){ return o.isQty ? fmtQty(r.qty) : (r.v[o.name] || ""); }
+  function valOf(r, o){ return isSumCol(o) ? fmtQty(r.sum) : (r.v[o.name] || ""); }
 
   function cutText(s){
     var n = parseInt($("dchars").value,10);
@@ -4366,7 +4422,7 @@ var QRPCodes = (function(){
     if(!sel.length){ $("dcharsTip").textContent = ""; return; }
     var o = sel[0], max = 0;
     rawRows.forEach(function(r){
-      var s = String(o.isQty ? r.qty : (r.v[o.name]||""));
+      var s = String(r.v[o.name] || "");
       if(s.length>max) max = s.length;
     });
     $("dchars").max = max || 200;
@@ -4429,14 +4485,18 @@ var QRPCodes = (function(){
   document.addEventListener("keydown", function(e){ if(e.key === "Escape") closeDrawer(); });
   window.addEventListener("resize", function(){ if(!isMobile()) closeDrawer(); });
 
-  // 左右折叠：整条侧栏收起，预览铺满
+  // 左右折叠：整条侧栏收起，预览铺满。只有顶栏最左这一个开关，收/放都点它
   function setRail(on){
     $("app").classList.toggle("is-rail", on);
-    $("railBtn").setAttribute("aria-expanded", on ? "false" : "true");
+    var b = $("railBtn");
+    b.setAttribute("aria-expanded", on ? "false" : "true");
+    b.setAttribute("aria-label", on ? "展开设置面板" : "折叠设置面板");
+    b.title = on ? "展开设置面板" : "折叠设置面板";
     setTimeout(function(){ fitZoom(); }, 0);
   }
-  $("railBtn").addEventListener("click", function(){ setRail(true); });
-  $("railOpenBtn").addEventListener("click", function(){ setRail(false); });
+  $("railBtn").addEventListener("click", function(){
+    setRail(!$("app").classList.contains("is-rail"));
+  });
 
   // 上下折叠：一键全部展开 / 收起
   var SECTS = ["sect1","sect2","sect3","sect4"];
@@ -4512,6 +4572,12 @@ var QRPCodes = (function(){
   });
   ["cols","cutline","cw","ch","dlines","tField"]
     .forEach(function(id){ $(id).addEventListener("change", render); });
+  $("sumField").addEventListener("change", function(){
+    refreshChips();          // 「·合计」角标跟着走
+    onNumFieldChange();      // 数值条件的提示要区分「合计值 / 原始行值」
+    updateCharTip();
+    render();
+  });
   ["qrscale","fscale","kwmode","sym"].forEach(function(name){
     Array.prototype.forEach.call(document.querySelectorAll('input[name="'+name+'"]'), function(el){
       el.addEventListener("change", render);
