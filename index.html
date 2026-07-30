@@ -2,18 +2,19 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="免安装的 Excel 批量二维码标签打印工具。纯前端运行，数据不出本机浏览器。">
-<!-- 安全策略：禁止一切外部/网络访问；脚本样式仅限同源，图片仅允许本地生成的 data: 二维码。
-     Excel 数据全程留在本机浏览器内存中，既不上传也不落盘。 -->
+<meta name="theme-color" content="#2f5fe0">
+<!-- 安全策略：禁止一切外部/网络访问；脚本样式全部内联，图片仅允许本地生成的 data: 二维码。
+     表格数据全程留在本机浏览器内存中，既不上传也不落盘。 -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'">
-<title>QRprint · 物料二维码标签打印工具</title>
+<title>QRprint · Excel 批量二维码标签打印</title>
 <style>
 /* =====================================================================
    QRprint — 界面样式（单文件内联）
-   说明：本文件分两部分
+   本文件分两部分：
      1) 屏幕界面（可自由修改外观）
      2) 标签排版引擎（.a4page / .grid / .cell / @media print）
         —— 第 2 部分的尺寸单位与 CSS 变量由下方「应用逻辑」直接控制，
@@ -41,12 +42,13 @@
   --err:           #c33a22;
   --shadow-1: 0 1px 2px rgba(16,24,40,.06);
   --shadow-2: 0 6px 20px rgba(16,24,40,.09);
+  --shadow-3: 0 12px 40px rgba(16,24,40,.18);
   --r-s: 8px;
   --r-m: 11px;
-  --r-l: 16px;
-  --sidebar-w: 348px;
+  --topbar-h: 54px;
+  --sidebar-w: 340px;
 
-  /* ↓↓↓ 排版引擎变量，由 app.js 写入，请勿改名 ↓↓↓ */
+  /* ↓↓↓ 排版引擎变量，由应用逻辑写入，请勿改名 ↓↓↓ */
   --qr: 30mm;
   --fs: 3mm;
   --fs2: 2.4mm;
@@ -64,6 +66,7 @@
     --accent-soft:#1b2740; --accent-border:#31456e;
     --ok:#4ade80; --warn:#fbbf24; --err:#fb7185;
     --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 6px 22px rgba(0,0,0,.45);
+    --shadow-3:0 12px 44px rgba(0,0,0,.6);
   }
 }
 :root[data-theme="dark"]{
@@ -74,6 +77,7 @@
   --accent-soft:#1b2740; --accent-border:#31456e;
   --ok:#4ade80; --warn:#fbbf24; --err:#fb7185;
   --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 6px 22px rgba(0,0,0,.45);
+  --shadow-3:0 12px 44px rgba(0,0,0,.6);
 }
 :root[data-theme="light"]{
   --bg:#eceff4; --surface:#ffffff; --surface-2:#f6f8fb; --surface-3:#eef1f6;
@@ -83,6 +87,7 @@
   --accent-soft:#e9effd; --accent-border:#bacdf7;
   --ok:#0d7a3d; --warn:#a45408; --err:#c33a22;
   --shadow-1:0 1px 2px rgba(16,24,40,.06); --shadow-2:0 6px 20px rgba(16,24,40,.09);
+  --shadow-3:0 12px 40px rgba(16,24,40,.18);
 }
 
 /* ------------------------------------------------------------------ 基础 */
@@ -95,21 +100,22 @@ body{
   font-size:13px; line-height:1.5;
   color:var(--text); background:var(--bg);
   -webkit-font-smoothing:antialiased;
+  -webkit-text-size-adjust:100%;
 }
 .app{ display:flex; flex-direction:column; height:100dvh; }
 .hide{ display:none !important; }
-.sr-only{
-  position:absolute; width:1px; height:1px; margin:-1px; padding:0;
-  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
-}
+.only-mobile{ display:none !important; }
 button{ font:inherit; }
-a{ color:var(--accent); }
+code{
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:.92em;
+  background:var(--surface-3); padding:1px 4px; border-radius:4px;
+}
 
 /* ---------------------------------------------------------------- 顶栏 */
 .topbar{
-  flex:0 0 auto; display:flex; align-items:center; gap:14px;
-  padding:10px 16px; background:var(--surface);
-  border-bottom:1px solid var(--border); box-shadow:var(--shadow-1); z-index:20;
+  flex:0 0 auto; display:flex; align-items:center; gap:10px;
+  height:var(--topbar-h); padding:0 14px; background:var(--surface);
+  border-bottom:1px solid var(--border); box-shadow:var(--shadow-1); z-index:40;
 }
 .brand{ display:flex; align-items:center; gap:10px; min-width:0; }
 .brand .mark{
@@ -121,11 +127,10 @@ a{ color:var(--accent); }
 .brand h1{ margin:0; font-size:15px; font-weight:650; letter-spacing:.2px; white-space:nowrap; }
 .brand p{ margin:1px 0 0; font-size:11.5px; color:var(--text-3); white-space:nowrap; }
 .brand .names{ min-width:0; overflow:hidden; }
-
 .topbar .spacer{ flex:1 1 auto; }
 
 .pill{
-  display:inline-flex; align-items:center; gap:6px; max-width:38vw;
+  display:inline-flex; align-items:center; gap:6px; max-width:34vw;
   padding:5px 11px; border-radius:999px; font-size:12px; font-weight:550;
   background:var(--surface-3); color:var(--text-2); border:1px solid var(--border);
   overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
@@ -143,20 +148,18 @@ a{ color:var(--accent); }
   display:inline-flex; align-items:center; justify-content:center; gap:7px;
   padding:8px 15px; border-radius:var(--r-s); border:1px solid transparent;
   background:var(--accent); color:var(--accent-ink);
-  font-size:13px; font-weight:600; cursor:pointer;
-  transition:background .14s ease, box-shadow .14s ease, opacity .14s ease;
+  font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;
+  transition:background .14s ease, opacity .14s ease;
 }
 .btn:hover{ background:var(--accent-hover); }
-.btn:active{ transform:translateY(.5px); }
 .btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
-.btn svg{ width:15px; height:15px; }
-.btn.ghost{
-  background:transparent; color:var(--text-2); border-color:var(--border-strong);
-}
+.btn svg{ width:15px; height:15px; flex:0 0 auto; }
+.btn.ghost{ background:transparent; color:var(--text-2); border-color:var(--border-strong); }
 .btn.ghost:hover{ background:var(--surface-3); color:var(--text); }
-.btn.icon{ padding:7px; width:33px; height:33px; }
-.btn.icon svg{ width:16px; height:16px; }
-.btn[disabled]{ opacity:.45; cursor:not-allowed; }
+.btn.icon{ padding:0; width:34px; height:34px; flex:0 0 auto; }
+.btn.icon svg{ width:17px; height:17px; }
+.btn.block{ width:100%; }
+.btn[disabled]{ opacity:.4; cursor:not-allowed; }
 .btn[disabled]:hover{ background:var(--accent); }
 .btn.ghost[disabled]:hover{ background:transparent; }
 
@@ -165,51 +168,47 @@ a{ color:var(--accent); }
   flex:1 1 auto; min-height:0;
   display:grid; grid-template-columns:var(--sidebar-w) minmax(0,1fr);
 }
+/* 遮罩只在移动端抽屉打开时存在，桌面宽度下永远不显示 */
+.scrim{ display:none; }
 
 /* ---------------------------------------------------------------- 侧栏 */
+/* 关键：用 block 流而不是 flex 列，避免子项被 flex-shrink 压扁后裁切内容 */
 .sidebar{
   min-height:0; overflow-y:auto; overscroll-behavior:contain;
   background:var(--surface); border-right:1px solid var(--border);
-  padding:14px 14px 26px;
-  display:flex; flex-direction:column; gap:12px;
+  padding:12px 14px 28px;
+  display:block;
 }
-.card{
-  background:var(--surface-2); border:1px solid var(--border);
-  border-radius:var(--r-m); overflow:hidden;
+.sect{ margin:0 0 6px; }
+.sect + .sect{ border-top:1px solid var(--border); padding-top:12px; }
+.sect-hd{
+  display:flex; align-items:center; gap:8px; margin:0 0 10px;
+  font-size:12.5px; font-weight:650; color:var(--text); letter-spacing:.2px;
 }
-.card > summary,
-.card > .card-hd{
-  display:flex; align-items:center; gap:9px;
-  padding:10px 12px; font-size:12.5px; font-weight:650; color:var(--text);
-  cursor:pointer; user-select:none; list-style:none;
-}
-.card > summary::-webkit-details-marker{ display:none; }
-.card > summary::after{
-  content:""; margin-left:auto; width:7px; height:7px; flex:0 0 auto;
-  border-right:1.6px solid var(--text-3); border-bottom:1.6px solid var(--text-3);
-  transform:rotate(45deg) translateY(-2px); transition:transform .18s ease;
-}
-.card[open] > summary::after{ transform:rotate(-135deg) translateY(-1px); }
-.card > summary:hover{ background:var(--surface-3); }
 .step{
   width:19px; height:19px; flex:0 0 auto; border-radius:6px;
   background:var(--accent-soft); color:var(--accent);
   font-size:11px; font-weight:700; display:grid; place-items:center;
 }
-.card-bd{ padding:2px 12px 13px; display:flex; flex-direction:column; gap:11px; }
+.sect-bd{ display:flex; flex-direction:column; gap:11px; }
+.sect-bd > *{ flex:0 0 auto; }
 
-.field{ display:flex; flex-direction:column; gap:5px; }
+.field{ display:flex; flex-direction:column; gap:5px; min-width:0; }
 .field > label,
 .field-label{ font-size:11.5px; font-weight:600; color:var(--text-2); }
 .field-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.hint{ font-size:11px; color:var(--text-3); line-height:1.55; }
+.grow{ flex:1 1 118px; min-width:0; }
+.hint{ font-size:11px; color:var(--text-3); line-height:1.6; margin:0; }
 .hint.err{ color:var(--err); }
+.hint:empty{ display:none; }
+.sep{ color:var(--text-3); flex:0 0 auto; }
+.unit{ font-size:11.5px; color:var(--text-3); flex:0 0 auto; }
 
 select,
 input[type=number],
 input[type=text],
 textarea{
-  width:100%; padding:6px 9px; font:inherit; font-size:12.5px;
+  width:100%; padding:7px 9px; font:inherit; font-size:13px;
   color:var(--text); background:var(--surface);
   border:1px solid var(--border-strong); border-radius:var(--r-s);
   transition:border-color .14s ease, box-shadow .14s ease;
@@ -218,10 +217,10 @@ select{
   appearance:none; padding-right:26px; cursor:pointer;
   background-image:linear-gradient(45deg,transparent 50%,var(--text-3) 50%),
                    linear-gradient(135deg,var(--text-3) 50%,transparent 50%);
-  background-position:calc(100% - 14px) 52%, calc(100% - 9px) 52%;
+  background-position:calc(100% - 14px) 53%, calc(100% - 9px) 53%;
   background-size:5px 5px, 5px 5px; background-repeat:no-repeat;
 }
-textarea{ resize:vertical; min-height:38px; line-height:1.45; }
+textarea{ resize:vertical; min-height:44px; line-height:1.45; }
 select:focus, input:focus, textarea:focus{
   outline:none; border-color:var(--accent);
   box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
@@ -229,10 +228,6 @@ select:focus, input:focus, textarea:focus{
 select:disabled, input:disabled, textarea:disabled{
   background:var(--surface-3); color:var(--text-3); cursor:not-allowed;
 }
-input[type=number]{ width:100%; }
-.num{ flex:1 1 0; min-width:0; }
-.sep{ color:var(--text-3); flex:0 0 auto; }
-.unit{ font-size:11.5px; color:var(--text-3); flex:0 0 auto; }
 
 /* --------------------------------------------------------- 分段选择器 */
 .seg{
@@ -241,11 +236,12 @@ input[type=number]{ width:100%; }
   border-radius:var(--r-s);
 }
 .seg label{
-  flex:1 1 0; position:relative; text-align:center; cursor:pointer;
-  padding:5px 6px; border-radius:6px; font-size:12px; font-weight:550;
-  color:var(--text-2); white-space:nowrap;
+  flex:1 1 0; min-width:0; position:relative; text-align:center; cursor:pointer;
+  padding:6px 4px; border-radius:6px; font-size:12px; font-weight:550;
+  color:var(--text-2);
   transition:background .14s ease, color .14s ease;
 }
+.seg label > span{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .seg input{ position:absolute; opacity:0; pointer-events:none; }
 .seg label:hover{ color:var(--text); }
 .seg label:has(input:checked){
@@ -256,75 +252,86 @@ input[type=number]{ width:100%; }
 
 /* --------------------------------------------------------- 复选胶囊 */
 .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.chips-in{ display:contents; }
 .chip{
   display:inline-flex; align-items:center; gap:5px;
-  padding:4px 9px 4px 7px; border-radius:999px;
+  padding:5px 10px 5px 8px; border-radius:999px;
   background:var(--surface); border:1px solid var(--border-strong);
-  font-size:12px; color:var(--text-2); cursor:pointer;
+  font-size:12px; color:var(--text-2); cursor:pointer; max-width:100%;
   transition:background .14s, border-color .14s, color .14s;
 }
+.chip > span,
+.chip{ overflow-wrap:anywhere; }
 .chip:hover{ border-color:var(--accent-border); }
-.chip input{ accent-color:var(--accent); margin:0; width:13px; height:13px; cursor:pointer; }
+.chip input{ accent-color:var(--accent); margin:0; width:14px; height:14px; flex:0 0 auto; cursor:pointer; }
 .chip:has(input:checked){
   background:var(--accent-soft); border-color:var(--accent-border);
   color:var(--accent); font-weight:600;
 }
 .chip.locked{
   background:var(--accent-soft); border-color:var(--accent-border);
-  color:var(--accent); font-weight:600; cursor:default;
+  color:var(--accent); font-weight:650; cursor:default;
 }
-.chip .sub{ font-size:10.5px; font-weight:500; color:var(--text-3); }
-.chip:has(input:checked) .sub{ color:inherit; opacity:.7; }
+.chip.locked .tick{ width:13px; height:13px; flex:0 0 auto; }
+.chip .sub{ font-size:10.5px; font-weight:500; opacity:.72; }
 
 /* --------------------------------------------------------- 文件拖放区 */
 .drop{
   position:relative; display:block; cursor:pointer; text-align:center;
-  padding:18px 12px; border-radius:var(--r-m);
-  border:1.5px dashed var(--border-strong); background:var(--surface);
+  padding:16px 12px; border-radius:var(--r-m);
+  border:1.5px dashed var(--border-strong); background:var(--surface-2);
   transition:border-color .16s ease, background .16s ease;
 }
-.drop:hover{ border-color:var(--accent); background:var(--accent-soft); }
-.drop.is-over{ border-color:var(--accent); background:var(--accent-soft); }
+.drop:hover, .drop.is-over{ border-color:var(--accent); background:var(--accent-soft); }
 .drop input[type=file]{
   position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer;
 }
-.drop .ico{ color:var(--accent); }
+.drop .ico{ display:block; color:var(--accent); }
 .drop .ico svg{ width:26px; height:26px; display:block; margin:0 auto 7px; }
-.drop .t{ font-size:12.5px; font-weight:600; color:var(--text); }
-.drop .s{ font-size:11px; color:var(--text-3); margin-top:3px; }
+.drop .t{ display:block; font-size:13px; font-weight:600; color:var(--text); }
+.drop .s{ display:block; font-size:11px; color:var(--text-3); margin-top:3px; }
 .drop .fname{
-  margin-top:8px; font-size:11.5px; font-weight:600; color:var(--accent);
-  word-break:break-all;
+  display:block; margin-top:8px; font-size:11.5px; font-weight:600;
+  color:var(--accent); overflow-wrap:anywhere;
 }
 
 /* --------------------------------------------------------- 统计 */
-.stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0 12px; }
 .stat{
-  background:var(--surface); border:1px solid var(--border);
-  border-radius:var(--r-s); padding:8px 9px; text-align:center;
+  background:var(--surface-2); border:1px solid var(--border);
+  border-radius:var(--r-s); padding:9px 6px; text-align:center; min-width:0;
 }
-.stat .v{ font-size:16px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-.3px; }
+.stat .v{
+  font-size:16px; font-weight:700; font-variant-numeric:tabular-nums;
+  letter-spacing:-.3px; overflow:hidden; text-overflow:ellipsis;
+}
 .stat .k{ font-size:10.5px; color:var(--text-3); margin-top:1px; }
 .stat.hi .v{ color:var(--accent); }
 
-/* --------------------------------------------------------- 预览区 */
-.canvas{
-  min-height:0; display:flex; flex-direction:column; background:var(--bg);
+.note{
+  border:1px solid var(--border); border-radius:var(--r-s);
+  background:var(--surface-2); padding:9px 11px; margin:12px 0 0;
+  font-size:11px; color:var(--text-3); line-height:1.7;
 }
+.note b{ color:var(--text-2); font-weight:600; }
+
+/* --------------------------------------------------------- 预览区 */
+.canvas{ min-height:0; display:flex; flex-direction:column; background:var(--bg); }
 .canvas-bar{
   flex:0 0 auto; display:flex; align-items:center; gap:10px;
-  padding:8px 14px; border-bottom:1px solid var(--border);
-  background:color-mix(in srgb, var(--surface) 70%, transparent);
-  backdrop-filter:blur(6px);
-  font-size:12px; color:var(--text-2);
+  padding:7px 12px; border-bottom:1px solid var(--border);
+  background:var(--surface); font-size:12px; color:var(--text-2);
 }
 .canvas-bar .spacer{ flex:1 1 auto; }
-.canvas-bar .zoom{ display:flex; align-items:center; gap:4px; }
-.canvas-bar .zoom .val{
-  min-width:42px; text-align:center; font-variant-numeric:tabular-nums;
-  font-size:11.5px; color:var(--text-3);
+.count{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.zoom{ display:flex; align-items:center; gap:3px; flex:0 0 auto; }
+.zoom .val{
+  min-width:52px; padding:4px 2px; text-align:center; cursor:pointer;
+  font-variant-numeric:tabular-nums; font-size:11.5px; color:var(--text-3);
+  background:none; border:none; border-radius:6px;
 }
-.viewport{ flex:1 1 auto; min-height:0; overflow:auto; }
+.zoom .val:hover{ background:var(--surface-3); color:var(--text); }
+.viewport{ flex:1 1 auto; min-height:0; overflow:auto; -webkit-overflow-scrolling:touch; }
 #stage{ padding:16px 10px 40px; }
 @media screen{ #stage{ zoom:var(--zoom); } }
 
@@ -332,29 +339,52 @@ input[type=number]{ width:100%; }
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:12px; padding:8vh 20px; text-align:center; color:var(--text-3);
 }
-.empty svg{ width:88px; height:88px; opacity:.55; }
+.empty svg{ width:80px; height:80px; opacity:.5; }
 .empty .t{ font-size:14px; font-weight:600; color:var(--text-2); }
-.empty .s{ font-size:12px; max-width:34em; line-height:1.7; }
+.empty .s{ font-size:12px; max-width:32em; line-height:1.75; }
 
-.note{
-  border:1px solid var(--border); border-radius:var(--r-s);
-  background:var(--surface-2); padding:9px 11px;
-  font-size:11px; color:var(--text-3); line-height:1.65;
-}
-.note b{ color:var(--text-2); font-weight:600; }
-
-/* 移动端：上下堆叠 */
+/* =====================================================================
+   移动端：侧栏改为抽屉，顶栏精简，预览默认适应宽度
+   ===================================================================== */
 @media screen and (max-width:900px){
-  .app{ height:auto; min-height:100dvh; }
-  .shell{ grid-template-columns:minmax(0,1fr); }
-  .sidebar{
-    overflow:visible; border-right:none; border-bottom:1px solid var(--border);
-    max-height:none;
-  }
-  .canvas{ min-height:60vh; }
-  .viewport{ overflow:visible; }
+  :root{ --topbar-h:52px; }
+  .only-mobile{ display:inline-flex !important; }
   .brand p{ display:none; }
+  .brand .mark{ width:30px; height:30px; }
+  .pill{ max-width:28vw; font-size:11px; padding:4px 9px; }
+
+  .shell{ grid-template-columns:minmax(0,1fr); position:relative; }
+  .sidebar{
+    position:fixed; z-index:30;
+    top:var(--topbar-h); left:0; bottom:0; width:min(340px, 88vw);
+    border-right:1px solid var(--border); box-shadow:var(--shadow-3);
+    transform:translateX(-101%); transition:transform .22s ease;
+    padding-bottom:calc(28px + env(safe-area-inset-bottom));
+  }
+  .sidebar.is-open{ transform:none; }
+  .canvas{ grid-column:1; }
+  .scrim:not([hidden]){
+    display:block; position:fixed; inset:var(--topbar-h) 0 0 0; z-index:29;
+    background:rgba(8,12,18,.42);
+  }
+}
+
+@media screen and (max-width:520px){
+  .btn{ padding:9px 13px; }
+  .btn .btn-tx{ display:none; }
+  .btn.icon{ width:36px; height:36px; }
+  .topbar{ gap:8px; padding:0 10px; }
+  .brand h1{ font-size:14px; }
   .pill{ max-width:30vw; }
+  .canvas-bar{ padding:6px 8px; font-size:11px; }
+  #stage{ padding:10px 6px 32px; }
+  .stats .stat .v{ font-size:15px; }
+  /* 触控目标放大 */
+  select, input[type=number], input[type=text], textarea{ font-size:16px; padding:9px 10px; }
+  select{ padding-right:28px; }
+  .seg label{ padding:8px 4px; font-size:12.5px; }
+  .chip{ padding:7px 12px 7px 9px; font-size:12.5px; }
+  .drop{ padding:20px 12px; }
 }
 
 /* =====================================================================
@@ -399,7 +429,7 @@ input[type=number]{ width:100%; }
   :root{ --zoom:1; }
   html,body{ height:auto; background:#fff; color:#1a1a1a; }
   .app{ display:block; height:auto; }
-  .topbar, .sidebar, .canvas-bar, .no-print{ display:none !important; }
+  .topbar, .sidebar, .canvas-bar, .scrim, .no-print{ display:none !important; }
   .shell{ display:block; }
   .canvas{ display:block; background:#fff; min-height:0; }
   .viewport{ overflow:visible; }
@@ -426,8 +456,13 @@ input[type=number]{ width:100%; }
 
 <div class="app">
 
-  <!-- ======================================================== 顶栏 -->
+  <!-- ============================================================ 顶栏 -->
   <header class="topbar no-print">
+    <button class="btn ghost icon only-mobile" id="menuBtn" type="button" aria-label="打开设置面板" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+    </button>
+
     <div class="brand">
       <span class="mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -462,19 +497,21 @@ input[type=number]{ width:100%; }
         <path d="M6 9V3h12v6M6 18H4v-7h16v7h-2"></path>
         <rect x="7" y="14" width="10" height="7" rx="1"></rect>
       </svg>
-      打印
+      <span class="btn-tx">打印</span>
     </button>
   </header>
 
   <div class="shell">
 
-    <!-- ==================================================== 控制侧栏 -->
-    <aside class="sidebar no-print">
+    <div class="scrim no-print" id="scrim" hidden></div>
+
+    <!-- ======================================================== 控制侧栏 -->
+    <aside class="sidebar no-print" id="sidebar">
 
       <!-- ① 载入文件 -->
-      <details class="card" open>
-        <summary><span class="step">1</span>载入 Excel</summary>
-        <div class="card-bd">
+      <section class="sect">
+        <h2 class="sect-hd"><span class="step">1</span>载入表格</h2>
+        <div class="sect-bd">
           <label class="drop" id="drop">
             <input type="file" id="file" accept=".xlsx,.xls,.csv">
             <span class="ico" aria-hidden="true">
@@ -484,34 +521,39 @@ input[type=number]{ width:100%; }
                 <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
               </svg>
             </span>
-            <span class="t">点击选择，或拖放文件到此处</span>
+            <span class="t">点击选择文件</span>
             <span class="s">支持 .xlsx / .xls / .csv，最大 60 MB</span>
             <span class="fname hide" id="fileName"></span>
           </label>
           <p class="hint">
-            表头需含「物料号 / Item No.」列；「描述 / 仓库 / 库存」列会被自动识别。
+            表头需要有一列作为 <b>Key</b>（<code>Key</code> / <code>Item No.</code> / <code>物料号</code> /
+            <code>编号</code> / <code>Code</code> 等写法都能自动识别；实在认不出会退回用第 1 列）。
+            二维码内容 = Key。
           </p>
         </div>
-      </details>
+      </section>
 
-      <!-- ② 显示字段 -->
-      <details class="card" open>
-        <summary><span class="step">2</span>标签内容</summary>
-        <div class="card-bd">
+      <!-- ② 标签内容 -->
+      <section class="sect">
+        <h2 class="sect-hd"><span class="step">2</span>标签内容</h2>
+        <div class="sect-bd">
           <div class="field">
-            <span class="field-label">显示字段（二维码内容恒为物料号）</span>
+            <span class="field-label">显示字段</span>
             <div class="chips">
-              <span class="chip locked">
-                <input type="checkbox" checked disabled aria-label="物料号（必选）">物料号
+              <span class="chip locked" title="Key 为必选字段，同时也是二维码内容">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="tick">
+                  <path d="M4 12.5 9 17.5 20 6.5"></path>
+                </svg>Key
               </span>
-              <span id="fieldBox" style="display:contents"></span>
+              <span id="fieldBox" class="chips-in"></span>
             </div>
-            <p class="hint" id="fieldHint">载入文件后自动列出全部列。勾选的字段同时参与去重。</p>
+            <p class="hint" id="fieldHint">载入文件后，其余列会全部列在这里。勾选的字段同时参与去重。</p>
           </div>
 
           <div class="field-row">
-            <div class="field" style="flex:1 1 118px;">
-              <label for="dlines">首行备注行数</label>
+            <div class="field grow">
+              <label for="dlines">备注行数</label>
               <select id="dlines">
                 <option value="1">1 行</option>
                 <option value="2" selected>2 行</option>
@@ -519,24 +561,24 @@ input[type=number]{ width:100%; }
                 <option value="99">不限</option>
               </select>
             </div>
-            <div class="field" style="flex:1 1 118px;">
-              <label for="dchars">首行截断字数</label>
+            <div class="field grow">
+              <label for="dchars">截断字数</label>
               <input type="number" id="dchars" min="1" step="1" placeholder="全部">
             </div>
           </div>
           <p class="hint" id="dcharsTip"></p>
         </div>
-      </details>
+      </section>
 
-      <!-- ③ 版式 -->
-      <details class="card" open>
-        <summary><span class="step">3</span>纸张与版式</summary>
-        <div class="card-bd">
+      <!-- ③ 纸张与版式 -->
+      <section class="sect">
+        <h2 class="sect-hd"><span class="step">3</span>纸张与版式</h2>
+        <div class="sect-bd">
           <div class="field">
             <span class="field-label">打印模式</span>
             <div class="seg" role="radiogroup" aria-label="打印模式">
-              <label><input type="radio" name="mode" value="a4" checked>A4 多枚一页</label>
-              <label><input type="radio" name="mode" value="label">标签纸一枚一页</label>
+              <label><input type="radio" name="mode" value="a4" checked><span>A4 多枚一页</span></label>
+              <label><input type="radio" name="mode" value="label"><span>标签纸一枚一页</span></label>
             </div>
           </div>
 
@@ -544,15 +586,17 @@ input[type=number]{ width:100%; }
           <div id="a4opts" class="field">
             <label for="cols">每行个数</label>
             <div class="field-row">
-              <select id="cols" class="num">
+              <select id="cols" class="grow">
+                <option value="auto" selected>自动（按内容排）</option>
                 <option value="1">1 个 / 行</option>
                 <option value="2">2 个 / 行</option>
-                <option value="4" selected>4 个 / 行</option>
+                <option value="4">4 个 / 行</option>
                 <option value="6">6 个 / 行</option>
                 <option value="8">8 个 / 行</option>
               </select>
               <label class="chip"><input type="checkbox" id="cutline" checked>裁切线</label>
             </div>
+            <p class="hint" id="gridTip"></p>
           </div>
 
           <!-- 标签纸选项 -->
@@ -571,9 +615,9 @@ input[type=number]{ width:100%; }
               <option value="custom">自定义…</option>
             </select>
             <div class="field-row hide" id="customwrap">
-              <input type="number" id="cw" class="num" min="10" max="300" step="1" placeholder="宽" value="40" aria-label="自定义宽度 mm">
+              <input type="number" id="cw" class="grow" min="10" max="300" step="1" placeholder="宽" value="40" aria-label="自定义宽度 mm">
               <span class="sep">×</span>
-              <input type="number" id="ch" class="num" min="10" max="300" step="1" placeholder="高" value="30" aria-label="自定义高度 mm">
+              <input type="number" id="ch" class="grow" min="10" max="300" step="1" placeholder="高" value="30" aria-label="自定义高度 mm">
               <span class="unit">mm</span>
             </div>
           </div>
@@ -581,47 +625,47 @@ input[type=number]{ width:100%; }
           <div class="field">
             <span class="field-label">二维码大小</span>
             <div class="seg" role="radiogroup" aria-label="二维码大小">
-              <label><input type="radio" name="qrscale" value="0.8">小</label>
-              <label><input type="radio" name="qrscale" value="1" checked>标准</label>
-              <label><input type="radio" name="qrscale" value="1.15">大</label>
+              <label><input type="radio" name="qrscale" value="0.8"><span>小</span></label>
+              <label><input type="radio" name="qrscale" value="1" checked><span>标准</span></label>
+              <label><input type="radio" name="qrscale" value="1.15"><span>大</span></label>
             </div>
           </div>
 
           <div class="field">
             <span class="field-label">文字大小</span>
             <div class="seg" role="radiogroup" aria-label="文字大小">
-              <label><input type="radio" name="fscale" value="0.85">小</label>
-              <label><input type="radio" name="fscale" value="1" checked>标准</label>
-              <label><input type="radio" name="fscale" value="1.2">大</label>
+              <label><input type="radio" name="fscale" value="0.85"><span>小</span></label>
+              <label><input type="radio" name="fscale" value="1" checked><span>标准</span></label>
+              <label><input type="radio" name="fscale" value="1.2"><span>大</span></label>
             </div>
           </div>
         </div>
-      </details>
+      </section>
 
       <!-- ④ 筛选 -->
-      <details class="card" open>
-        <summary><span class="step">4</span>筛选范围</summary>
-        <div class="card-bd">
+      <section class="sect">
+        <h2 class="sect-hd"><span class="step">4</span>筛选范围</h2>
+        <div class="sect-bd">
           <div class="field">
             <label for="kw">关键字</label>
-            <textarea id="kw" rows="2" placeholder="可粘贴多个物料号，空格 / 逗号 / 换行分隔"></textarea>
+            <textarea id="kw" rows="2" placeholder="可粘贴多个 Key，空格 / 逗号 / 换行分隔"></textarea>
             <div class="seg" role="radiogroup" aria-label="匹配方式">
-              <label><input type="radio" name="kwmode" value="fuzzy" checked>模糊匹配</label>
-              <label><input type="radio" name="kwmode" value="exact">物料号精确</label>
+              <label><input type="radio" name="kwmode" value="fuzzy" checked><span>模糊匹配</span></label>
+              <label><input type="radio" name="kwmode" value="exact"><span>Key 精确</span></label>
             </div>
             <p class="hint err" id="miss"></p>
           </div>
 
           <div class="field-row">
-            <div class="field" style="flex:1 1 130px;">
+            <div class="field grow hide" id="whsWrap">
               <label for="whsFilter">仓库</label>
               <select id="whsFilter"><option value="">全部</option></select>
             </div>
-            <div class="field" style="flex:1 1 130px;">
+            <div class="field grow hide" id="stockWrap">
               <label for="stockFilter">库存</label>
               <select id="stockFilter">
                 <option value="all">全部</option>
-                <option value="gt0">仅有库存 &gt; 0</option>
+                <option value="gt0">仅 &gt; 0</option>
               </select>
             </div>
           </div>
@@ -629,13 +673,13 @@ input[type=number]{ width:100%; }
           <div class="field">
             <label for="from">条数范围（留空 = 全部）</label>
             <div class="field-row">
-              <input type="number" id="from" class="num" min="1" step="1" placeholder="起" aria-label="起始条数">
+              <input type="number" id="from" class="grow" min="1" step="1" placeholder="起" aria-label="起始条数">
               <span class="sep">~</span>
-              <input type="number" id="to" class="num" min="1" step="1" placeholder="止" aria-label="结束条数">
+              <input type="number" id="to" class="grow" min="1" step="1" placeholder="止" aria-label="结束条数">
             </div>
           </div>
         </div>
-      </details>
+      </section>
 
       <!-- 统计 -->
       <div class="stats">
@@ -644,7 +688,7 @@ input[type=number]{ width:100%; }
         <div class="stat"><div class="v" id="statPages">—</div><div class="k">预计页数</div></div>
       </div>
 
-      <button class="btn ghost" id="applyBtn" type="button">
+      <button class="btn ghost block" id="applyBtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"></path>
@@ -653,28 +697,29 @@ input[type=number]{ width:100%; }
       </button>
 
       <p class="note">
-        <b>打印前请检查：</b>浏览器打印对话框中把「边距」设为<b>无 / 默认</b>、关闭<b>页眉页脚</b>，
-        并勾选<b>背景图形</b>（否则裁切线不会出纸）。<br>
-        预览上限 2000 枚，超出请用筛选或条数范围分批。
+        <b>打印前请检查：</b>浏览器打印对话框里把「边距」设为<b>无 / 默认</b>、关闭<b>页眉页脚</b>，
+        并勾选<b>背景图形</b>（否则裁切线不出纸）。
       </p>
+
+      <button class="btn block only-mobile" id="doneBtn" type="button">查看预览</button>
     </aside>
 
-    <!-- ==================================================== 预览区 -->
+    <!-- ======================================================== 预览区 -->
     <section class="canvas">
       <div class="canvas-bar no-print">
-        <span id="count">尚无预览内容</span>
+        <span id="count" class="count">尚无预览内容</span>
         <span class="spacer"></span>
         <div class="zoom">
           <button class="btn ghost icon" id="zoomOut" type="button" aria-label="缩小预览">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path></svg>
           </button>
-          <span class="val" id="zoomVal">100%</span>
+          <button class="val" id="zoomVal" type="button" title="点击：适应宽度">100%</button>
           <button class="btn ghost icon" id="zoomIn" type="button" aria-label="放大预览">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
           </button>
         </div>
       </div>
-      <div class="viewport">
+      <div class="viewport" id="viewport">
         <div id="stage"></div>
       </div>
     </section>
@@ -3017,8 +3062,10 @@ var qrcode = function() {
 /* =====================================================================
    QRprint — 应用逻辑（单文件内联）
    ---------------------------------------------------------------------
-   全程在浏览器内运行：Excel 解析（SheetJS）与二维码生成（qrcode.js）都是
-   本地依赖，页面用 CSP 禁止了一切网络请求，数据不上传、不落盘。
+   全程在浏览器内运行：表格解析（SheetJS）与二维码生成（qrcode.js）都是
+   内联依赖，页面用 CSP 禁止了一切网络请求，数据不上传、不落盘。
+
+   术语：Key = 二维码内容，也是标签上必定显示的第一行。其余列均为可选字段。
 
    排版计算（renderA4 / renderLabels）与上方样式表中的
    .a4page / .grid / .cell 规则一一对应，改动会直接影响出纸尺寸。
@@ -3028,27 +3075,37 @@ var qrcode = function() {
 
   var $ = function(id){ return document.getElementById(id); };
 
-  var MAXPREVIEW = 2000;
+  var MAXPREVIEW = 2000;          // 预览渲染上限（打印时可选择渲染全部）
   var MAXROWS    = 200000;        // 单次最多解析行数，防止超大文件把浏览器卡死
   var MAXFILE    = 60*1024*1024;  // 单个文件大小上限 60MB
-  var MAXCACHE   = 4000;          // 二维码缓存上限，防止内存无限增长
+  var MAXCACHE   = 8000;          // 二维码缓存上限，防止内存无限增长
   var MAXTEXT    = 300;           // 单格文本最大字符数，防止异常长内容撑破版面
   var QR_EC = "M", QR_TYPE = 0;
+
+  var PW = 194, PH = 281;         // A4 去掉 8mm 页边距后的可用区域（mm）
 
   // 所有以外部数据为键的字典一律使用无原型对象，杜绝 __proto__ / constructor 原型污染
   function dict(){ return Object.create(null); }
 
-  // 表头别名（大小写/空格/点/下划线 无关）—— 仅用于识别 物料号/描述/仓库/库存 四个特殊列
+  // 表头别名（大小写/空格/点/下划线/括号 无关）
+  //   key —— 二维码内容列，必需；认不出时退回第 1 列
+  //   desc/whs/qty —— 可选列的特殊待遇（默认勾选 / 提供筛选 / 自动合计）
   var ALIAS = {
-    item : ["itemno","itemcode","itemnumber","物料号","物料编号","物料代码","项目编号","品番","料号","编码"],
-    desc : ["itemdescription","description","itemname","物料描述","描述","品名","物料名称","名称"],
+    item : ["key","itemno","itemcode","itemnumber","itemid","code","id","no","number",
+            "barcode","sn","serialno","partno","partnumber",
+            "物料号","物料编号","物料代码","项目编号","品番","料号","编码","编号","代码",
+            "条码","条形码","序列号","关键字","主键"],
+    desc : ["itemdescription","description","itemname","name","title",
+            "物料描述","描述","品名","物料名称","名称","标题","说明"],
     whs  : ["warehousecode","warehouse","whscode","仓库","仓库代码","仓库编号","库位"],
-    qty  : ["instock","stock","onhand","qty","quantity","库存","现有量","在库","库存量"]
+    qty  : ["instock","stock","onhand","qty","quantity","库存","现有量","在库","库存量","数量"]
   };
 
-  var cols = [];      // [{name, isQty, isWhs, isDesc}] 除物料号外的全部列
+  var cols = [];      // [{name, isQty, isWhs, isDesc}] 除 Key 外的全部列
   var rawRows = [];   // [{item, qty, v:{列名:值}}]
   var truncated = false;
+  var keyFallback = false;   // 未识别到 Key 列、退回用第 1 列
+  var fullRender = false;    // 打印时临时渲染全部（跳过预览上限）
 
   function norm(s){ return String(s==null?"":s).toLowerCase().replace(/[\s._\-()（）]/g,""); }
   function cellv(row, idx){
@@ -3064,7 +3121,7 @@ var qrcode = function() {
     return el ? el.value : "";
   }
 
-  /* ------------------------------------------------------------ 读取 Excel */
+  /* ------------------------------------------------------------ 读取表格 */
   $("file").addEventListener("change", function(e){
     var f = e.target.files[0]; if(!f) return;
     showFileName(f.name);
@@ -3080,13 +3137,16 @@ var qrcode = function() {
         var wb = XLSX.read(new Uint8Array(ev.target.result),
                  {type:"array", cellFormula:false, cellHTML:false, cellStyles:false, bookVBA:false});
         parseWorkbook(wb);
-        if(rawRows.length===0) throw new Error("未识别到物料数据（需要含 Item No. / 物料号 的表头行）");
+        if(rawRows.length===0) throw new Error("没有解析到任何数据行");
         setStatus("已读取 " + rawRows.length + " 行" +
-                  (truncated ? "（已达 "+MAXROWS+" 行上限，其余未解析）" : ""),
-                  truncated ? "warn" : "ok");
+                  (keyFallback ? "（未识别到 Key 列，已用第 1 列）" : "") +
+                  (truncated ? "（已达 "+MAXROWS+" 行上限）" : ""),
+                  (truncated || keyFallback) ? "warn" : "ok");
         buildFieldBox();
-        buildWhsFilter();
+        buildFilters();
         updateCharTip();
+        closeDrawer();
+        resetZoom();
         render();
       }catch(err){ setStatus("解析失败：" + err.message, "err"); }
     };
@@ -3095,11 +3155,12 @@ var qrcode = function() {
 
   function parseWorkbook(wb){
     cols = []; rawRows = [];
-    var seen = dict(); truncated = false;
+    var seen = dict(); truncated = false; keyFallback = false;
     wb.SheetNames.forEach(function(sn){
       if(rawRows.length >= MAXROWS){ truncated = true; return; }
       var aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:""});
       var info = locateHeader(aoa); if(!info) return;
+      if(info.fallback) keyFallback = true;
       var cm = info.colMap, hdr = aoa[info.headerRow] || [];
 
       var idxList = [];                       // [[列号, 列名, isQty, isWhs]]
@@ -3130,23 +3191,36 @@ var qrcode = function() {
     });
   }
 
+  // 先按别名找 Key 列；找不到就退回「前 30 行里第一行有 ≥1 个非空单元格的行」作表头、第 1 列作 Key
   function locateHeader(aoa){
-    for(var i=0; i<Math.min(aoa.length, 30); i++){
+    var limit = Math.min(aoa.length, 30), i, c;
+    for(i=0; i<limit; i++){
       var r = aoa[i] || [], cm = {};
-      for(var c=0;c<r.length;c++){
+      for(c=0;c<r.length;c++){
         var n = norm(r[c]); if(!n) continue;
         for(var key in ALIAS){
           if(cm[key]!==undefined) continue;
           if(ALIAS[key].indexOf(n) >= 0){ cm[key]=c; break; }
         }
       }
-      if(cm.item!==undefined) return { headerRow:i, colMap:cm };
+      if(cm.item!==undefined) return { headerRow:i, colMap:cm, fallback:false };
+    }
+    for(i=0; i<limit; i++){
+      var row = aoa[i] || [];
+      var filled = 0, firstIdx = -1;
+      for(c=0;c<row.length;c++){
+        if(String(row[c]==null?"":row[c]).trim()!==""){ filled++; if(firstIdx<0) firstIdx=c; }
+      }
+      // 至少两列才像表头，且下面还得有数据行
+      if(filled >= 2 && i+1 < aoa.length){
+        return { headerRow:i, colMap:{ item:firstIdx }, fallback:true };
+      }
     }
     return null;
   }
 
   /* -------------------------------------------------- 字段勾选区（全部列） */
-  // 全部用 DOM 节点构建（不用 innerHTML），Excel 里的任何内容都不会被当作 HTML 执行
+  // 全部用 DOM 节点构建（不用 innerHTML），表格里的任何内容都不会被当作 HTML 执行
   function buildFieldBox(){
     var box = $("fieldBox");
     box.textContent = "";
@@ -3166,8 +3240,8 @@ var qrcode = function() {
       box.appendChild(lab);
     });
     $("fieldHint").textContent = cols.length
-      ? "共 " + cols.length + " 列可选。勾选的字段同时参与去重。"
-      : "该文件除物料号外没有其它列。";
+      ? "共 " + cols.length + " 个可选字段。勾选的字段同时参与去重。"
+      : "该表除 Key 外没有其它列。";
   }
   function checkedCols(){
     var out = [];
@@ -3183,8 +3257,12 @@ var qrcode = function() {
     for(var i=0;i<cols.length;i++) if(cols[i].isWhs) return cols[i].name;
     return null;
   }
+  function hasQtyCol(){
+    for(var i=0;i<cols.length;i++) if(cols[i].isQty) return true;
+    return false;
+  }
 
-  /* ------------------------ 聚合（按物料号 + 已勾选字段去重；库存列合计） */
+  /* ---------------------------- 聚合（按 Key + 已勾选字段去重；库存列合计） */
   function aggregate(){
     var sel = checkedCols();
     var keyCols = sel.filter(function(o){ return !o.isQty; });
@@ -3208,7 +3286,8 @@ var qrcode = function() {
     return out;
   }
 
-  function buildWhsFilter(){
+  // 仓库 / 库存筛选只在表里真有对应列时才出现
+  function buildFilters(){
     var wc = whsCol(), sel = $("whsFilter"), cur = sel.value, seen = dict(), list = [];
     if(wc) rawRows.forEach(function(r){ var w=r.v[wc]; if(w && !seen[w]){ seen[w]=1; list.push(w); } });
     list.sort();
@@ -3219,7 +3298,14 @@ var qrcode = function() {
       var op = document.createElement("option"); op.value = w; op.textContent = w; sel.appendChild(op);
     });
     if(list.indexOf(cur)>=0) sel.value = cur;
-    sel.disabled = !wc;
+
+    var showWhs = !!wc && list.length > 0;
+    $("whsWrap").classList.toggle("hide", !showWhs);
+    if(!showWhs) sel.value = "";
+
+    var showQty = hasQtyCol();
+    $("stockWrap").classList.toggle("hide", !showQty);
+    if(!showQty) $("stockFilter").value = "all";
   }
 
   /* --------------------------------------------------- 关键字（批量匹配） */
@@ -3289,10 +3375,11 @@ var qrcode = function() {
     if(rawRows.length===0){
       stage.appendChild(emptyState(
         "还没有数据",
-        "在左侧载入一份 Excel（SAP B1 库存导出或任何含物料号列的表格），预览会立即出现在这里。"));
+        "在左侧第 1 步载入表格（任何含 Key 列的 Excel / CSV 都可以），预览会立即出现在这里。"));
       $("count").textContent = "尚无预览内容";
       setStats("—","—","—");
       $("miss").textContent = "";
+      $("gridTip").textContent = "";
       return;
     }
 
@@ -3303,18 +3390,24 @@ var qrcode = function() {
       : "";
 
     if(items.length===0){
-      stage.appendChild(emptyState("没有匹配的物料", "请放宽第 4 步的筛选条件后重试。"));
+      stage.appendChild(emptyState("没有匹配的记录", "请放宽第 4 步的筛选条件后重试。"));
       $("count").textContent = "原始 " + rawRows.length + " 行 → 0 枚";
       setStats(rawRows.length, 0, 0);
+      $("gridTip").textContent = "";
       return;
     }
 
-    var shown = items.slice(0, MAXPREVIEW);
-    var pages = (radio("mode") === "a4") ? renderA4(stage, shown) : renderLabels(stage, shown);
+    var capped = !fullRender && items.length > MAXPREVIEW;
+    var shown = capped ? items.slice(0, MAXPREVIEW) : items;
 
-    $("count").textContent = "原始 " + rawRows.length + " 行 → 去重后 " + items.length + " 枚" +
-      (items.length>MAXPREVIEW ? "，预览仅显示前 "+MAXPREVIEW+" 枚" : "");
+    // 版式先算出来，页数按「全部可打印枚数」算，不受预览上限影响
+    var layout = (radio("mode") === "a4") ? renderA4(stage, shown) : renderLabels(stage, shown);
+    var pages = Math.ceil(items.length / layout.perPage);
+
+    $("count").textContent = "原始 " + rawRows.length + " 行 → 去重后 " + items.length + " 枚，共 " +
+      pages + " 页" + (capped ? "（预览只画前 " + MAXPREVIEW + " 枚，打印时可选全部）" : "");
     setStats(rawRows.length, items.length, pages);
+    fitZoom();
   }
 
   function setStats(raw, out, pages){
@@ -3351,38 +3444,69 @@ var qrcode = function() {
     st.setProperty("--dclamp", $("dlines").value);
   }
 
-  function renderA4(stage, items){
-    var PW = 194, PH = 281;                 // A4 去掉 8mm 页边距后的可用区域
-    var cols_ = parseInt($("cols").value,10);
+  // 一个 A4 单元格的尺寸推算，autoCols 与 renderA4 共用，保证两者永远一致
+  function a4Metrics(cols_, sel){
     var cw = PW / cols_;                    // 单元格宽度（等分，无间隙 → 刀路等距）
-    var sel = checkedCols();
     var descLines = sel.length ? Math.min(3, parseInt($("dlines").value,10)||1) : 0;
     var hasRest = sel.length > 1;
-
     var qr = Math.floor(cw*(cols_<=2 ? 0.52 : 0.78)*qScale()*10)/10;
     if(qr > cw-3) qr = Math.floor((cw-3)*10)/10;
     var fs = Math.max(2.2, Math.round(Math.min(qr*0.13, cw*0.10)*fScale()*100)/100);
     var gap = Math.max(1.2, Math.round(qr*0.06*10)/10);
     var fs2 = fs*0.82;
     // 单元格高度 = 二维码 + 间距 + 文本行 + 上下内边距，所有格统一
-    var cellH = qr + gap + fs*1.25 + descLines*fs2*1.2 + (hasRest ? fs2*1.25 : 0) + 3;
-    cellH = Math.round(cellH*10)/10;
+    var cellH = Math.round((qr + gap + fs*1.25 + descLines*fs2*1.2 +
+                            (hasRest ? fs2*1.25 : 0) + 3) * 10)/10;
+    var rows = Math.max(1, Math.floor(PH / cellH));
+    return { cw:cw, qr:qr, fs:fs, gap:gap, cellH:cellH, rows:rows, perPage:cols_*rows };
+  }
 
-    var rowsPerPage = Math.max(1, Math.floor(PH / cellH));
-    var perPage = cols_ * rowsPerPage;
+  // 「自动」每行个数：在字号还认得清、Key 两行以内放得下的前提下尽量排密
+  function autoCols(items, sel){
+    var maxKey = 0;
+    for(var i=0;i<items.length;i++){
+      if(items[i].item.length > maxKey) maxKey = items[i].item.length;
+    }
+    var cand = [8,6,4,2,1];
+    for(var j=0;j<cand.length;j++){
+      var c = cand[j];
+      if(sel.length >= 2 && c > 6) continue;          // 字段多，别排太密
+      var m = a4Metrics(c, sel);
+      if(m.fs < 2.55) continue;                       // 字太小，扫得到也看不清
+      if(maxKey * 0.58 * m.fs > (m.cw - 2.5) * 2) continue;   // Key 两行放不下
+      return c;
+    }
+    return 1;
+  }
 
-    setVars(qr, fs, gap);
+  function colsValue(items, sel){
+    var v = $("cols").value;
+    if(v === "auto"){
+      var c = autoCols(items, sel);
+      return { cols:c, auto:true };
+    }
+    return { cols:parseInt(v,10) || 4, auto:false };
+  }
+
+  function renderA4(stage, items){
+    var sel = checkedCols();
+    var pick = colsValue(items, sel);
+    var cols_ = pick.cols;
+    var m = a4Metrics(cols_, sel);
+
+    setVars(m.qr, m.fs, m.gap);
     setPageStyle("@page{ size:A4; margin:8mm; }");
+    $("gridTip").textContent = (pick.auto ? "自动：" : "") +
+      cols_ + " 个/行 × " + m.rows + " 行 = 每页 " + m.perPage + " 枚";
 
     var cs = cols_<=2 ? 8 : (cols_<=4 ? 6 : 4);
     var cut = $("cutline").checked;
-    var pages = 0;
-    for(var p=0; p<items.length; p+=perPage){
+    for(var p=0; p<items.length; p+=m.perPage){
       var page = document.createElement("div"); page.className = "a4page";
       var grid = document.createElement("div"); grid.className = "grid" + (cut ? " cut" : "");
       grid.style.gridTemplateColumns = "repeat("+cols_+", 1fr)";
-      grid.style.gridAutoRows = cellH + "mm";
-      var chunk = items.slice(p, p+perPage);
+      grid.style.gridAutoRows = m.cellH + "mm";
+      var chunk = items.slice(p, p+m.perPage);
       chunk.forEach(function(it){ grid.appendChild(makeCell(it, cs)); });
       // 补空格，保证最后一页的格线与其它页完全一致（切刀不会错位）
       if(cut){
@@ -3392,9 +3516,8 @@ var qrcode = function() {
         }
       }
       page.appendChild(grid); stage.appendChild(page);
-      pages++;
     }
-    return pages;
+    return { perPage:m.perPage };
   }
 
   function renderLabels(stage, items){
@@ -3410,6 +3533,7 @@ var qrcode = function() {
     var fs = Math.max(1.9, Math.round(Math.min(qr*0.14, w*0.085)*fScale()*100)/100);
     setVars(qr, fs, Math.max(1, Math.round(qr*0.06*10)/10));
     setPageStyle("@page{ size:"+w+"mm "+h+"mm; margin:0; }");
+    $("gridTip").textContent = "";
 
     var wrap = document.createElement("div"); wrap.className = "labels";
     items.forEach(function(it){
@@ -3418,7 +3542,7 @@ var qrcode = function() {
       lbl.appendChild(makeCell(it, 6)); wrap.appendChild(lbl);
     });
     stage.appendChild(wrap);
-    return items.length;   // 标签纸模式一枚一页
+    return { perPage:1 };   // 标签纸一枚一页
   }
 
   function valOf(r, o){ return o.isQty ? fmtQty(r.qty) : (r.v[o.name] || ""); }
@@ -3433,7 +3557,7 @@ var qrcode = function() {
     var d = document.createElement("div"); d.className = "cell";
     try{
       var img = document.createElement("img");
-      img.src = qrDataURL(r.item, cellSize);   // 二维码内容 = 物料号
+      img.src = qrDataURL(r.item, cellSize);   // 二维码内容 = Key
       img.alt = r.item;
       d.appendChild(img);
     }catch(err){
@@ -3496,17 +3620,107 @@ var qrcode = function() {
     el.classList.remove("hide");
   }
 
+  /* --------------------------------------------------------------- 打印 */
+  function doPrint(){
+    if(rawRows.length===0){ alert("请先载入表格文件"); openDrawer(); return; }
+    var n = currentItems().length;
+    if(n===0){ alert("当前无可打印内容，请调整筛选条件"); return; }
+
+    if(n > MAXPREVIEW){
+      var all = confirm("共 " + n + " 枚，超过预览上限 " + MAXPREVIEW + " 枚。\n\n" +
+                        "「确定」：渲染并打印全部 " + n + " 枚（数量大时可能要等十几秒）\n" +
+                        "「取消」：只打印预览里的前 " + MAXPREVIEW + " 枚");
+      if(all){
+        setStatus("正在渲染全部 " + n + " 枚…", "warn");
+        fullRender = true;
+        // 让状态先刷出来，再做重活
+        setTimeout(function(){
+          try{ render(); window.print(); }
+          finally{ fullRender = false; setStatus("已读取 " + rawRows.length + " 行", "ok"); render(); }
+        }, 30);
+        return;
+      }
+    }
+    window.print();
+  }
+
+  /* ---------------------------------------------------------- 移动端抽屉 */
+  function isMobile(){ return window.matchMedia("(max-width:900px)").matches; }
+  function openDrawer(){
+    if(!isMobile()) return;
+    $("sidebar").classList.add("is-open");
+    $("scrim").hidden = false;
+    $("menuBtn").setAttribute("aria-expanded", "true");
+  }
+  function closeDrawer(){
+    $("sidebar").classList.remove("is-open");
+    $("scrim").hidden = true;
+    $("menuBtn").setAttribute("aria-expanded", "false");
+  }
+  $("menuBtn").addEventListener("click", function(){
+    if($("sidebar").classList.contains("is-open")) closeDrawer(); else openDrawer();
+  });
+  $("scrim").addEventListener("click", closeDrawer);
+  $("doneBtn").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape") closeDrawer(); });
+  window.addEventListener("resize", function(){ if(!isMobile()) closeDrawer(); });
+
+  /* ------------------------------------------------------------- 预览缩放 */
+  var STEPS = [0.2,0.25,0.3,0.4,0.5,0.65,0.8,1,1.25,1.5,2];
+  var zoom = 1, userZoomed = false;
+
+  function applyZoom(z){
+    zoom = Math.min(2, Math.max(0.2, z));
+    document.documentElement.style.setProperty("--zoom", String(zoom));
+    $("zoomVal").textContent = Math.round(zoom*100) + "%";
+    $("zoomOut").disabled = zoom <= STEPS[0] + 1e-6;
+    $("zoomIn").disabled  = zoom >= STEPS[STEPS.length-1] - 1e-6;
+  }
+  function step(dir){
+    var i, next = zoom;
+    if(dir < 0){ for(i=STEPS.length-1;i>=0;i--) if(STEPS[i] < zoom-1e-6){ next = STEPS[i]; break; } }
+    else       { for(i=0;i<STEPS.length;i++)    if(STEPS[i] > zoom+1e-6){ next = STEPS[i]; break; } }
+    userZoomed = true;
+    applyZoom(next);
+  }
+  // 窄屏（手机）下让整页正好占满可视宽度；用户手动缩放后不再自动接管
+  function fitZoom(force){
+    if(userZoomed && !force) return;
+    var first = $("stage").firstElementChild;
+    if(!first || first.classList.contains("empty")) return;
+    // 必须用「不随 zoom 变化的」固有宽度，否则会自我缩放成死循环：
+    // A4 恒为 210mm @96dpi；标签模式取单枚标签的 offsetWidth（CSS px，不受 zoom 影响）
+    var natural;
+    if(first.classList.contains("a4page")){
+      natural = 794;
+    }else{
+      var one = first.querySelector(".lbl");
+      if(!one) return;
+      natural = one.offsetWidth + 16;
+    }
+    var avail = $("viewport").clientWidth - 20;
+    applyZoom(Math.min(1, avail / natural));
+  }
+  function resetZoom(){ userZoomed = false; }
+
+  $("zoomOut").addEventListener("click", function(){ step(-1); });
+  $("zoomIn").addEventListener("click", function(){ step(1); });
+  $("zoomVal").addEventListener("click", function(){ userZoomed = false; fitZoom(true); });
+  window.addEventListener("resize", debounce(function(){ fitZoom(); }, 200));
+
   /* ------------------------------------------------------------- 交互绑定 */
   Array.prototype.forEach.call(document.querySelectorAll('input[name="mode"]'), function(el){
     el.addEventListener("change", function(){
       var isLbl = radio("mode") === "label";
       $("a4opts").classList.toggle("hide", isLbl);
       $("lblopts").classList.toggle("hide", !isLbl);
+      resetZoom();
       render();
     });
   });
   $("lblsize").addEventListener("change", function(){
     $("customwrap").classList.toggle("hide", this.value!=="custom");
+    resetZoom();
     render();
   });
   ["cols","cutline","cw","ch","dlines","whsFilter","stockFilter"]
@@ -3519,15 +3733,8 @@ var qrcode = function() {
   ["kw","from","to","dchars"].forEach(function(id){
     $(id).addEventListener("input", debounce(render, 400));
   });
-  $("applyBtn").addEventListener("click", render);
-
-  $("printBtn").addEventListener("click", function(){
-    if(rawRows.length===0){ alert("请先载入 Excel 文件"); return; }
-    var n = currentItems().length;
-    if(n===0){ alert("当前无可打印内容，请调整筛选条件"); return; }
-    if(n > MAXPREVIEW && !confirm("当前 "+n+" 枚，仅会打印预览中的前 "+MAXPREVIEW+" 枚。继续？")) return;
-    window.print();
-  });
+  $("applyBtn").addEventListener("click", function(){ render(); closeDrawer(); });
+  $("printBtn").addEventListener("click", doPrint);
 
   // 拖放高亮（文件本身由覆盖在拖放区上的 <input type=file> 原生接收）
   (function(){
@@ -3538,20 +3745,6 @@ var qrcode = function() {
     ["dragleave","dragend","drop"].forEach(function(t){
       drop.addEventListener(t, function(){ drop.classList.remove("is-over"); });
     });
-  })();
-
-  // 预览缩放（仅影响屏幕显示，打印时强制 1:1）
-  (function(){
-    var STEPS = [0.4,0.5,0.65,0.8,1,1.25,1.5,2], idx = 4;
-    function apply(){
-      document.documentElement.style.setProperty("--zoom", String(STEPS[idx]));
-      $("zoomVal").textContent = Math.round(STEPS[idx]*100) + "%";
-      $("zoomOut").disabled = (idx===0);
-      $("zoomIn").disabled  = (idx===STEPS.length-1);
-    }
-    $("zoomOut").addEventListener("click", function(){ if(idx>0){ idx--; apply(); } });
-    $("zoomIn").addEventListener("click", function(){ if(idx<STEPS.length-1){ idx++; apply(); } });
-    apply();
   })();
 
   // 主题：默认跟随系统，手动切换后记在本机 localStorage
@@ -3571,7 +3764,9 @@ var qrcode = function() {
 
   function debounce(fn, ms){ var t; return function(){ clearTimeout(t); t = setTimeout(fn, ms); }; }
 
-  render();   // 首屏空状态
+  applyZoom(1);
+  render();                                    // 首屏空状态
+  if(isMobile()) openDrawer(); else closeDrawer();   // 手机上先把第 1 步露出来
 })();
 </script>
 </body>
