@@ -138,7 +138,16 @@ for (const s of ['123456', 'A', '0303000237-00', 'MAT-100001',
                  'x'.repeat(100), 'y'.repeat(200)]) {
   const dm = C.dataMatrix(s);
   if (!dm) { ok(`"${s.slice(0, 12)}" 可编码`, false); continue; }
-  ok(`"${s.slice(0, 12)}"(${dm.size}x${dm.size}) 校验子归零`, syndromesZero(dm.codewords, dm.spec[2]));
+  // 交错规格要先按块拆开：块 b 由数据码字 b, b+n… 与纠错码字 cap+b, cap+b+n… 组成
+  const [, cap, eccN, , blocks] = dm.spec;
+  let allZero = true;
+  for (let b = 0; b < blocks; b++) {
+    const part = [];
+    for (let i = b; i < cap; i += blocks) part.push(dm.codewords[i]);
+    for (let i = cap + b; i < cap + eccN; i += blocks) part.push(dm.codewords[i]);
+    allZero = allZero && syndromesZero(part, eccN / blocks);
+  }
+  ok(`"${s.slice(0, 12)}"(${dm.size}x${dm.size}, ${blocks} 块) 每块校验子归零`, allZero);
   ok(`"${s.slice(0, 12)}" 码字数 = 数据+纠错`, dm.codewords.length === dm.spec[1] + dm.spec[2]);
 }
 

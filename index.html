@@ -3336,14 +3336,29 @@ var QRPCodes = (function(){
     return ecc;
   }
 
-  // 只用单块（无交织）的方形规格，覆盖到 204 个数据码字，够任何 Key 用
-  //            [符号边长, 数据码字, 纠错码字, 区块行数(=列数)]
+  // 方形规格，覆盖到 204 个数据码字，够任何 Key 用（ISO/IEC 16022 表 7）
+  //            [符号边长, 数据码字, 纠错码字, 区块行数(=列数), RS 交错块数]
+  // 52×52 起纠错码分成两块交错排列：码字 k 属于第 k % 块数 块
   var DM_SIZES = [
-    [10,   3,   5, 1], [12,   5,   7, 1], [14,   8,  10, 1], [16,  12,  12, 1],
-    [18,  18,  14, 1], [20,  22,  18, 1], [22,  30,  20, 1], [24,  36,  24, 1],
-    [26,  44,  28, 1], [32,  62,  36, 2], [36,  86,  42, 2], [40, 114,  48, 2],
-    [44, 144,  56, 2], [48, 174,  68, 2], [52, 204,  84, 2]
+    [10,   3,   5, 1, 1], [12,   5,   7, 1, 1], [14,   8,  10, 1, 1], [16,  12,  12, 1, 1],
+    [18,  18,  14, 1, 1], [20,  22,  18, 1, 1], [22,  30,  20, 1, 1], [24,  36,  24, 1, 1],
+    [26,  44,  28, 1, 1], [32,  62,  36, 2, 1], [36,  86,  42, 2, 1], [40, 114,  48, 2, 1],
+    [44, 144,  56, 2, 1], [48, 174,  68, 2, 1], [52, 204,  84, 2, 2]
   ];
+
+  // 按交错块分别计算纠错码，再交错排回：块 b 取数据码字 b, b+n, b+2n…，
+  // 它的第 i 个纠错码字放在纠错区的 b + i*n 位置
+  function dmEcc(data, eccN, blocks){
+    if(blocks === 1) return rsEcc(data, eccN);
+    var per = eccN / blocks, out = new Array(eccN), b, i;
+    for(b=0;b<blocks;b++){
+      var part = [];
+      for(i=b;i<data.length;i+=blocks) part.push(data[i]);
+      var e = rsEcc(part, per);
+      for(i=0;i<per;i++) out[b + i*blocks] = e[i];
+    }
+    return out;
+  }
 
   // ASCII 编码：两位数字合并，其余单字节；>127 用 Upper Shift(235)
   function dmEncode(text){
@@ -3457,7 +3472,7 @@ var QRPCodes = (function(){
     var side = spec[0], cap = spec[1], eccN = spec[2], reg = spec[3];
     data = dmPad(data.slice(), cap);
     if(!data) return null;
-    var all = data.concat(rsEcc(data, eccN));
+    var all = data.concat(dmEcc(data, eccN, spec[4]));
 
     // 映射矩阵尺寸 = 符号尺寸去掉每个区块四周的定位边
     var nrow = side - 2*reg, ncol = side - 2*reg;

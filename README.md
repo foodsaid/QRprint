@@ -86,7 +86,7 @@
 node test/codes.test.mjs
 ```
 
-609 项断言，直接从 `index.html` 里抠代码来跑，所以仓库不存第二份源码、也不需要构建。覆盖 Code 128 的图案表不变量与编解码往返、DataMatrix 的 RS 校验子归零 / 全尺寸放置双射性 / 位图往返、以及输出 SVG 无外部引用。
+609 项断言，直接从 `index.html` 里抠代码来跑，所以仓库不存第二份源码、也不需要构建。覆盖 Code 128 的图案表不变量与编解码往返、DataMatrix 的 RS 校验子归零（52×52 按交错块分别校验） / 全尺寸放置双射性 / 位图往返、以及输出 SVG 无外部引用。
 
 **真实解码器交叉验证**：CI 里把页面实际生成的二维码、Code 128、DataMatrix 导出成模块矩阵，交给与本项目毫无共同代码的 [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) 解码，逐个核对内容、码制和纠错等级（`test/crosscheck/`）。本地运行：
 
@@ -96,9 +96,7 @@ pip install --require-hashes -r test/crosscheck/requirements.txt
 python test/crosscheck/decode.py symbols.json
 ```
 
-它发现过两个自测发现不了的问题：二维码里的中文会变成乱码（已修复，现在统一按 UTF-8 编码），以及下面这个尚未修复、记在 `test/crosscheck/known_failures.json` 里的问题，CI 会如实显示：
-
-- **超过 174 个字符的 DataMatrix 扫不出来**（52×52 需要两块交错的纠错码）。174 个字符以内正常。
+它发现过两个自测发现不了的问题，都已修复：二维码里的中文会变成乱码（现在统一按 UTF-8 编码），以及超过 174 个字符的 DataMatrix 扫不出来（52×52 起纠错码按 ISO/IEC 16022 分两块交错排列）。以后再发现、一时修不了的问题会记在 `test/crosscheck/known_failures.json`，CI 会如实显示。
 
 投产前仍建议先用你的扫描枪试打一张。
 
