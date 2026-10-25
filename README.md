@@ -94,9 +94,8 @@ pip install --require-hashes -r test/crosscheck/requirements.txt
 python test/crosscheck/decode.py symbols.json
 ```
 
-它已经发现两个自测发现不了的问题，记在 `test/crosscheck/known_failures.json`，修好前 CI 会如实显示：
+它发现过两个自测发现不了的问题：二维码里的中文会变成乱码（已修复，现在统一按 UTF-8 编码），以及下面这个尚未修复、记在 `test/crosscheck/known_failures.json` 里的问题，CI 会如实显示：
 
-- **二维码里的中文会变成乱码**（qrcode.js 默认只取每个字符的低 8 位）。编号是字母、数字和常用符号时不受影响。
 - **超过 174 个字符的 DataMatrix 扫不出来**（52×52 需要两块交错的纠错码）。174 个字符以内正常。
 
 投产前仍建议先用你的扫描枪试打一张。
