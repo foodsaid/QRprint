@@ -1,4 +1,3 @@
 {
-  "_comment": "交叉验证发现、目前仍编码错误的码。它们按清单失败时 CI 通过；一旦能正确解码（请从这里删除）或出现清单外的失败，CI 都会失败。键为 kind + 空格 + 原文。",
-  "dm yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy": "52×52 及以上必须把 Reed-Solomon 纠错码分成两块交错排列（ISO/IEC 16022 表 7），QRprint 只算了一块，所以 175 个字符起（52×52）无法被扫码器读取。174 个字符以内（48×48 及以下）正常。"
+  "_comment": "交叉验证发现、目前仍编码错误的码。它们按清单失败时 CI 通过；一旦能正确解码（请从这里删除）或出现清单外的失败，CI 都会失败。键为 kind + 空格 + 原文。"
 }

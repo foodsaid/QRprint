@@ -46,7 +46,8 @@ const TEXTS = {
   c128: ['A-1001', 'MAT-100001', '0303000237-00', '123456', '12345', 'A', 'Hello World!',
          'abcXYZ 09 #@$%', '~', '00000000', '9876543210987654321012', 'Z'.repeat(40)],
   dm: ['A-1001', 'MAT-100001', '0303000237-00', '123456', 'A', '0', '99',
-       'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 'Café', 'x'.repeat(100), 'y'.repeat(200)],
+       'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 'Café', 'x'.repeat(100), 'y'.repeat(200),
+       'z'.repeat(174), 'z'.repeat(175), 'w'.repeat(204), '1234567890'.repeat(40)],
 };
 
 const symbols = [];
