@@ -3599,6 +3599,10 @@ var QRPCodes = (function(){
   var MAXENUM    = 300;           // 超过这么多不同取值就不当枚举列
   var MINBAR     = 0.19;          // Code128 最窄条宽警戒线（mm），低于此扫描仪容易读不到
   var QR_EC = "M", QR_TYPE = 0;
+  // 二维码一律按 UTF-8 编码：qrcode.js 默认只取每个字符的低 8 位，中文会变成乱码；
+  // 纯 ASCII 内容两种编码字节完全相同。Latin-1 单字节也不可取：qrcode.js 不写 ECI，
+  // 扫码器得靠猜字符集，°、±、µ、× 等常被猜成日文，UTF-8 则能被可靠识别
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
 
   var PW = 194, PH = 281;         // A4 去掉 8mm 页边距后的可用区域（mm）
 
