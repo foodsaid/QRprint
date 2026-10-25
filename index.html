@@ -3656,6 +3656,28 @@ var QRPCodes = (function(){
   }
 
   /* ------------------------------------------------------------ 读取表格 */
+  // xlsx/xls 与带 BOM 的文件原样交给 SheetJS。其余文本（CSV 等）SheetJS 会按单字节读，
+  // 无 BOM 的 UTF-8 中文因此变成乱码：先按 UTF-8 严格解码，不是 UTF-8 再按本地编码——
+  // 中文环境用 GBK（中文版 Excel 另存「CSV（逗号分隔）」的编码），否则用 Windows-1252
+  // （西文 Excel 的编码，也是 SheetJS 原来的默认值）。返回 { wb, enc }
+  function readBook(buf){
+    var u8 = new Uint8Array(buf),
+        opts = {cellFormula:false, cellHTML:false, cellStyles:false, bookVBA:false};
+    var zip = u8[0] === 0x50 && u8[1] === 0x4B,
+        ole = u8[0] === 0xD0 && u8[1] === 0xCF,
+        bom = (u8[0] === 0xEF && u8[1] === 0xBB && u8[2] === 0xBF) ||
+              (u8[0] === 0xFF && u8[1] === 0xFE) || (u8[0] === 0xFE && u8[1] === 0xFF);
+    if(zip || ole || bom){ opts.type = "array"; return { wb: XLSX.read(u8, opts), enc: "" }; }
+    var text, enc = "utf-8";
+    try{ text = new TextDecoder("utf-8", {fatal:true}).decode(u8); }
+    catch(err){
+      enc = /^zh/i.test(navigator.language || "") ? "gbk" : "windows-1252";
+      text = new TextDecoder(enc).decode(u8);
+    }
+    opts.type = "string";
+    return { wb: XLSX.read(text, opts), enc: enc };
+  }
+
   $("file").addEventListener("change", function(e){
     var f = e.target.files[0]; if(!f) return;
     showFileName(f.name);
@@ -3667,12 +3689,12 @@ var QRPCodes = (function(){
     reader.onerror = function(){ setStatus("读取失败：无法访问该文件", "err"); };
     reader.onload = function(ev){
       try{
-        // 关闭公式/HTML 解析，只取值，减少解析面
-        var wb = XLSX.read(new Uint8Array(ev.target.result),
-                 {type:"array", cellFormula:false, cellHTML:false, cellStyles:false, bookVBA:false});
-        parseWorkbook(wb);
+        // 关闭公式/HTML 解析，只取值，减少解析面（见 readBook）
+        var book = readBook(ev.target.result);
+        parseWorkbook(book.wb);
         if(rawRows.length===0) throw new Error("没有解析到任何数据行");
         setStatus("已读取 " + rawRows.length + " 行" +
+                  (book.enc === "gbk" ? "（按 GBK 编码读取）" : "") +
                   (keyFallback ? "（未识别到 Key 列，已用第 1 列）" : "") +
                   (truncated ? "（表格过大，已按上限截断）" : ""),
                   (truncated || keyFallback) ? "warn" : "ok");
