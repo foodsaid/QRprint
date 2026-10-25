@@ -86,12 +86,27 @@ node test/codes.test.mjs
 
 609 项断言，直接从 `index.html` 里抠代码来跑，所以仓库不存第二份源码、也不需要构建。覆盖 Code 128 的图案表不变量与编解码往返、DataMatrix 的 RS 校验子归零 / 全尺寸放置双射性 / 位图往返、以及输出 SVG 无外部引用。
 
-Windows 版 Chrome 没有 `BarcodeDetector`，所以**没能用真实解码器做端到端确认**——投产前建议先用你的扫描枪试打一张。
+**真实解码器交叉验证**：CI 里把页面实际生成的二维码、Code 128、DataMatrix 导出成模块矩阵，交给与本项目毫无共同代码的 [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) 解码，逐个核对内容、码制和纠错等级（`test/crosscheck/`）。本地运行：
+
+```bash
+node test/crosscheck/export.mjs > symbols.json
+pip install --require-hashes -r test/crosscheck/requirements.txt
+python test/crosscheck/decode.py symbols.json
+```
+
+它已经发现两个自测发现不了的问题，记在 `test/crosscheck/known_failures.json`，修好前 CI 会如实显示：
+
+- **二维码里的中文会变成乱码**（qrcode.js 默认只取每个字符的低 8 位）。编号是字母、数字和常用符号时不受影响。
+- **超过 174 个字符的 DataMatrix 扫不出来**（52×52 需要两块交错的纠错码）。174 个字符以内正常。
+
+投产前仍建议先用你的扫描枪试打一张。
 
 > ⚠️ 重新拼装单文件时的坑：别把依赖源码放进 `String.replace()` 的替换串——qrcode.js 里有 `case '$' :`，会被当成 `$'` 替换模式展开，静默破坏那段脚本。用替换函数并对各段做长度校验。
 
 </details>
 
 ---
+
+需要在报表、ERP 或程序里按需生成码图（含 GS1 Digital Link、签名防伪码）？用姊妹项目 **[qrbarcode](https://github.com/foodsaid/qrbarcode)**（服务端 API）。批量打印标签、数据不出本机，用 QRprint。
 
 MIT 许可。内联依赖沿用各自许可。QR Code 是 DENSO WAVE 的注册商标；Data Matrix 与 Code 128 是公开标准。
