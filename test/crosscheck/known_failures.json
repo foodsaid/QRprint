@@ -1,0 +1,7 @@
+{
+  "_comment": "交叉验证发现、目前仍编码错误的码。它们按清单失败时 CI 通过；一旦能正确解码（请从这里删除）或出现清单外的失败，CI 都会失败。键为 kind + 空格 + 原文。",
+  "qr 白色无纺布": "二维码按 qrcode.js 的默认 stringToBytes 编码，每个 UTF-16 字符只保留低 8 位，中文等非 Latin-1 字符会变成乱码。修复：改用 qrcode.stringToBytesFuncs['UTF-8']。",
+  "qr 物料A-01": "同上（二维码中的中文）。",
+  "qr 仓库WH01-库位3": "同上（二维码中的中文）。",
+  "dm yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy": "52×52 及以上必须把 Reed-Solomon 纠错码分成两块交错排列（ISO/IEC 16022 表 7），QRprint 只算了一块，所以 175 个字符起（52×52）无法被扫码器读取。174 个字符以内（48×48 及以下）正常。"
+}

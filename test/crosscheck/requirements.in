@@ -1,0 +1,8 @@
+# 交叉验证用的解码器（只在 CI 里用，与页面无关）。
+# 修改后重新生成带哈希的 requirements.txt（只取发布满 14 天的版本）：
+#   uv pip compile --python-platform linux --python-version 3.13 --generate-hashes \
+#     --exclude-newer "14 days" --exclude-newer-package pillow=false \
+#     test/crosscheck/requirements.in -o test/crosscheck/requirements.txt
+zxing-cpp==3.1.1
+# Pillow 13.0.0 修复了 12.x 的已知漏洞，发布未满 14 天，作为安全例外
+pillow>=13.0.0
