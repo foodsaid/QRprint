@@ -40,14 +40,14 @@
 
 <br>
 
-**各项上限**：文件 60 MB、20 万行、单表 256 列 / 300 万单元格、预览渲染 2000 枚（超出时页数仍按全部统计，点打印会问你是否渲染全部）。
+**各项上限**：文件 60 MB、20 万行、单表 256 列、全部 sheet 合计 300 万单元格、预览渲染 2000 枚（超出时页数仍按全部统计，点打印会问你是否渲染全部）。
 
 **已做的防护**，每条都用构造的攻击样例实测过，不是只读代码下的结论：
 
 - 全项目**零 `innerHTML` 写入**，表格内容只走 DOM 文本节点；CSP 额外开启 `require-trusted-types-for 'script'`，从平台层面堵死这类写入。含 `<img onerror>` / `<script>` / `<svg onload>` 的表格实测全部按纯文本打印。
 - 以表格内容为键的字典一律 `Object.create(null)`。表头与取值均为 `__proto__` / `constructor` 的表格实测 `Object.prototype` 零变化。
 - SheetJS 用 0.20.3，已含 [CVE-2023-30533](https://cdn.sheetjs.com/advisories/CVE-2023-30533)（原型污染）与 [CVE-2024-22363](https://cdn.sheetjs.com/advisories/CVE-2024-22363)（ReDoS）修复。
-- 超大表格展开前先夹到限额内——否则一个只有 2 个真实单元格的几 KB 文件可以声明 2560 万格（要 12.3 秒 / 463 MB），xlsx 最大能声明 170 亿格。
+- 超大表格展开前先夹到限额内——否则一个只有 2 个真实单元格的几 KB 文件可以声明 2560 万格（要 12.3 秒 / 463 MB），xlsx 最大能声明 170 亿格。这个预算由所有 sheet 共用，几 KB 的文件塞几百个 sheet 也放大不了。
 - 单元格与表头都截断到 300 字符。
 
 **三点如实说明**，是浏览器与 GitHub Pages 的固有限制，不是本工具的缺陷，日常使用没有实际影响：
@@ -63,7 +63,7 @@
 | SheetJS xlsx 0.20.3 | 951,971 | `2HJ+3EsM84THwnYlLN3a28HW12zshXXDxoIjxXShNQg=` |
 | qrcode.js (Kazuhiko Arase) | 56,693 | `uAoMx2wD1+RB2HTfVw+PyT2VbBl21HbhUlg40bXNcbg=` |
 | 码制模块（本项目） | 13,578 | `1D5m/rJuDAbWH/mzhUxe4jZh9+Jby5BSu+hQJU898q0=` |
-| 应用逻辑（本项目） | 45,953 | `Xo99Peu3RKce7ncMmCqd/+y7sVirL+SSpUfkzhhvEaY=` |
+| 应用逻辑（本项目） | 46,638 | `Ow/V2T/7dBf5GXelIZ7kh0NLBLYfLm7o6s1oVUGcdwY=` |
 
 > SheetJS 这份取自 npm 的 `@e965/xlsx` 镜像而非官方 <https://cdn.sheetjs.com>；版本号高于两个 CVE 的修复版本，也已用恶意文件实测未复现原型污染。若有供应链合规要求，建议自行从官方源替换同版本文件。
 

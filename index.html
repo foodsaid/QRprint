@@ -3593,7 +3593,7 @@ var QRPCodes = (function(){
   var MAXCACHE   = 8000;          // 码图缓存上限，防止内存无限增长
   var MAXTEXT    = 300;           // 单格文本最大字符数，防止异常长内容撑破版面
   var MAXCOLS    = 256;           // 单表最多处理多少列
-  var MAXCELLS   = 3000000;       // 单表最多展开多少个单元格（见 clampRange）
+  var MAXCELLS   = 3000000;       // 整个工作簿（所有 sheet 合计）最多展开多少个单元格（见 clampRange）
   var MAXFIELDS  = 6;             // 标签上最多显示几个可选字段（再多就挤不下了）
   var CHIPVIS    = 8;             // 字段胶囊默认露出几个，其余折叠
   var MAXENUM    = 300;           // 超过这么多不同取值就不当枚举列
@@ -3717,29 +3717,39 @@ var QRPCodes = (function(){
   // sheet_to_json 会按 !ref 声明的矩形整个铺开，跟真正有几个单元格无关。
   // 一个几 KB 的 xlsx 可以声明 A1:XFD1048576（170 亿格），足以把标签页拖死，
   // 所以展开前先把范围夹到预算之内。这是纯防御性裁剪，正常文件不会被触碰。
-  function clampRange(ws){
-    if(!ws || !ws["!ref"]) return false;
+  // 预算必须是整个工作簿共用的：只按单表限额的话，几 KB 的文件塞几百个 sheet、
+  // 每个都声明满额范围，照样能让展开量成百倍放大。
+  // 返回 { cells: 夹完后要展开的格数, hit: 是否被裁剪 }；没有可展开的范围时返回 null。
+  function clampRange(ws, budget){
+    if(!ws || !ws["!ref"]) return null;
     var r;
-    try{ r = XLSX.utils.decode_range(ws["!ref"]); }catch(e){ return false; }
+    try{ r = XLSX.utils.decode_range(ws["!ref"]); }catch(e){ return null; }
     var cols_ = r.e.c - r.s.c + 1, rows_ = r.e.r - r.s.r + 1;
-    if(!(cols_ > 0) || !(rows_ > 0)) return false;
+    if(!(cols_ > 0) || !(rows_ > 0)) return null;
     var hit = false;
     if(cols_ > MAXCOLS){ r.e.c = r.s.c + MAXCOLS - 1; cols_ = MAXCOLS; hit = true; }
-    var maxRows = Math.max(1, Math.floor(MAXCELLS / cols_));
-    if(rows_ > maxRows){ r.e.r = r.s.r + maxRows - 1; hit = true; }
+    var maxRows = Math.max(1, Math.floor(budget / cols_));
+    if(rows_ > maxRows){ r.e.r = r.s.r + maxRows - 1; rows_ = maxRows; hit = true; }
     if(hit) ws["!ref"] = XLSX.utils.encode_range(r);
-    return hit;
+    return { cells: cols_ * rows_, hit: hit };
   }
 
   function parseWorkbook(wb){
     cols = []; rawRows = [];
     var seen = dict(), stats = dict(), keyStat = newStat();
     truncated = false; keyFallback = false;
+    var budget = MAXCELLS;                    // 所有 sheet 共用的展开预算
 
     wb.SheetNames.forEach(function(sn){
       if(rawRows.length >= MAXROWS){ truncated = true; return; }
-      if(clampRange(wb.Sheets[sn])) truncated = true;
-      var aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:""});
+      var ws = wb.Sheets[sn];
+      if(!ws || !ws["!ref"]) return;          // 空 sheet，不占预算
+      if(budget <= 0){ truncated = true; return; }
+      var cr = clampRange(ws, budget);
+      if(!cr) return;
+      if(cr.hit) truncated = true;
+      budget -= cr.cells;
+      var aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:""});
       var info = locateHeader(aoa); if(!info) return;
       if(info.fallback) keyFallback = true;
       var cm = info.colMap, hdr = aoa[info.headerRow] || [];
