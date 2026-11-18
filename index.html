@@ -266,6 +266,8 @@ code{
 .grow{ flex:1 1 116px; min-width:0; }
 .hint{ font-size:11px; color:var(--text-3); line-height:1.6; margin:0; }
 .hint.err{ color:var(--err); }
+.gs1map{ display:grid; grid-template-columns:auto 1fr; gap:6px 8px; align-items:center; }
+.gs1map label{ font-size:12px; color:var(--text-2); }
 .hint.warn{ color:var(--warn); }
 .hint:empty{ display:none; }
 .sep{ color:var(--text-3); flex:0 0 auto; }
@@ -704,8 +706,29 @@ select:disabled, input:disabled, textarea:disabled{
               <label><input type="radio" name="sym" value="qr" checked><span>二维码</span></label>
               <label><input type="radio" name="sym" value="dm"><span>DataMatrix</span></label>
               <label><input type="radio" name="sym" value="c128"><span>条形码</span></label>
+              <label><input type="radio" name="sym" value="gs1"><span>GS1</span></label>
             </div>
             <p class="hint" id="symTip"></p>
+          </div>
+
+          <!-- GS1 选项：用哪几列拼成 GS1 数据 -->
+          <div id="gs1opts" class="field hide">
+            <span class="field-label">GS1 码</span>
+            <div class="seg" role="radiogroup" aria-label="GS1 码">
+              <label><input type="radio" name="gs1sym" value="qr" checked><span>Digital Link 二维码</span></label>
+              <label><input type="radio" name="gs1sym" value="dm"><span>GS1 DataMatrix</span></label>
+            </div>
+            <div class="gs1map">
+              <label for="gs1_gtin">GTIN</label><select id="gs1_gtin" data-gs1="gtin"></select>
+              <label for="gs1_batch">批号</label><select id="gs1_batch" data-gs1="batch"></select>
+              <label for="gs1_expiry">有效期</label><select id="gs1_expiry" data-gs1="expiry"></select>
+              <label for="gs1_best">最佳食用</label><select id="gs1_best" data-gs1="best_before"></select>
+              <label for="gs1_prod">生产日期</label><select id="gs1_prod" data-gs1="prod_date"></select>
+              <label for="gs1_serial">序列号</label><select id="gs1_serial" data-gs1="serial"></select>
+            </div>
+            <label for="gs1dom">解析域名（Digital Link 二维码用）</label>
+            <input type="text" id="gs1dom" placeholder="https://id.gs1.org" spellcheck="false" autocomplete="off">
+            <p class="hint" id="gs1Tip"></p>
           </div>
 
           <div class="field">
@@ -3462,7 +3485,11 @@ var QRPCodes = (function(){
 
   function dataMatrix(text){
     var data = dmEncode(text);
-    if(!data) return null;
+    return data ? dmSymbol(data) : null;
+  }
+
+  // 由已编码好的数据码字生成符号（GS1 DataMatrix 先插入 FNC1 再走这里）
+  function dmSymbol(data){
     var spec = null, i;
     for(i=0;i<DM_SIZES.length;i++){
       if(data.length <= DM_SIZES[i][1]){ spec = DM_SIZES[i]; break; }
@@ -3549,7 +3576,9 @@ var QRPCodes = (function(){
   // Data Matrix：viewBox 单位 = 1 模块，quiet 为静区模块数（规范要求 ≥1）
   function dataMatrixURL(text, quiet){
     var dm = dataMatrix(text);
-    if(!dm) return null;
+    return dm ? dmURL(dm, quiet) : null;
+  }
+  function dmURL(dm, quiet){
     var q = (quiet === undefined) ? 2 : quiet;
     var n = dm.size, side = n + 2*q, d = "", r, c;
     for(r=0;r<n;r++){
@@ -3565,7 +3594,126 @@ var QRPCodes = (function(){
     return svgURL(side, side, d);
   }
 
+  /* ================================================================ GS1 */
+  // GTIN + 批号 / 序列号 / 日期 → GS1 Digital Link（印成二维码）或 GS1 元素串（印成 GS1 DataMatrix）。
+  // 规则与姊妹项目 qrbarcode（gs1.py）一致，两边跑同一份测试向量（test/gs1_vectors.json）。
+  // 数据有误时抛出 Error，message 是可以直接印在标签上的中文提示。
+  var GS1_DATES = [["prod_date", "11", "生产日期"], ["pack_date", "13", "包装日期"],
+                   ["best_before", "15", "最佳食用日期"], ["expiry", "17", "有效期"]];
+  // GS1 字符集 82（General Specifications 图 7.11-1），批号 / 序列号最多 20 个字符
+  var GS1_CSET82 = /^[!"%&'()*+,\-.\/0-9:;<=>?A-Z_a-z]{1,20}$/;
+
+  // 模 10 校验位（GTIN、EAN 通用）：从右往左权重 3、1 交替
+  function gs1CheckDigit(digits){
+    var sum = 0, w = 3, i;
+    for(i = digits.length - 1; i >= 0; i--){ sum += (digits.charCodeAt(i) - 48) * w; w = 4 - w; }
+    return (10 - sum % 10) % 10;
+  }
+
+  // GTIN-8/12/13/14 → 14 位，并核对校验位
+  function gs1Gtin(raw){
+    var s = String(raw).trim();
+    if(!/^(\d{8}|\d{12,14})$/.test(s)) throw new Error("GTIN 须为 8、12、13 或 14 位数字");
+    var g = ("00000000000000" + s).slice(-14), cd = gs1CheckDigit(g.slice(0, 13));
+    if(Number(g.charAt(13)) !== cd) throw new Error("GTIN 校验位应为 " + cd + "，不是 " + g.charAt(13));
+    return g;
+  }
+
+  // 日期 → YYMMDD。接受 YYMMDD、YYYY-MM-DD（也可用 / 或 .），以及 Excel 日期序列号
+  // （读 xlsx 时日期单元格是数字）。日为 00 表示当月月底，GS1 允许。
+  function gs1Date(raw, label){
+    var s = String(raw).trim(), m, y, mo, d;
+    if((m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/.exec(s))){ y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else if(/^\d{6}$/.test(s)){ y = 2000 + +s.slice(0, 2); mo = +s.slice(2, 4); d = +s.slice(4); }
+    else if(/^\d{5}(\.\d+)?$/.test(s)){
+      // Excel 序列号：自 1899-12-30 起的天数，5 位数覆盖 1927–2173 年
+      var t = new Date(Date.UTC(1899, 11, 30) + Math.floor(+s) * 86400000);
+      y = t.getUTCFullYear(); mo = t.getUTCMonth() + 1; d = t.getUTCDate();
+    }
+    else throw new Error(label + "须为 YYMMDD、YYYY-MM-DD 或 Excel 日期");
+    if(y < 2000 || y > 2099) throw new Error(label + "须在 2000–2099 年之间");
+    if(mo < 1 || mo > 12) throw new Error(label + "的月份无效");
+    if(d !== 0 && (d < 1 || d > new Date(Date.UTC(y, mo, 0)).getUTCDate())) throw new Error(label + "的日期无效");
+    return ("0" + (y % 100)).slice(-2) + ("0" + mo).slice(-2) + ("0" + d).slice(-2);
+  }
+
+  function gs1Text(raw, label){
+    var s = String(raw).trim();
+    if(!GS1_CSET82.test(s)) throw new Error(label + "须为 1–20 个 GS1 允许的字符（字母、数字和常用符号，不含空格和中文）");
+    return s;
+  }
+
+  // 解析域名：https 开头，可带路径前缀，不带 ? # 和账号密码；默认 GS1 的 id.gs1.org
+  function gs1Resolver(raw){
+    var s = String(raw == null ? "" : raw).trim() || "https://id.gs1.org";
+    var m = /^https:\/\/([A-Za-z0-9.-]+(?::\d+)?)(\/[^?#\s]*)?$/.exec(s);
+    if(!m) throw new Error("解析域名须为 https:// 开头、不带 ? 和 # 的网址");
+    return "https://" + m[1] + (m[2] || "").replace(/\/+$/, "");
+  }
+
+  // fields：{gtin, batch（或 lot）, serial, prod_date, pack_date, best_before, expiry}；空值视为未填
+  function gs1Build(fields){
+    var f = fields || {};
+    function has(k){ return f[k] != null && String(f[k]).trim() !== ""; }
+    if(!has("gtin")) throw new Error("缺少 GTIN");
+    var batch = has("batch") ? f.batch : (has("lot") ? f.lot : "");
+    var item = { gtin: gs1Gtin(f.gtin),
+                 batch: batch !== "" ? gs1Text(batch, "批号") : "",
+                 serial: has("serial") ? gs1Text(f.serial, "序列号") : "",
+                 dates: [] };                               // [[AI, YYMMDD]]，按 AI 从小到大
+    GS1_DATES.forEach(function(d){ if(has(d[0])) item.dates.push([d[1], gs1Date(f[d[0]], d[2])]); });
+    return item;
+  }
+
+  // 与 Python urllib.parse.quote(v, safe="") 一致：字母数字和 -._~ 以外一律百分号编码
+  function gs1Pct(v){
+    return encodeURIComponent(v).replace(/[!'()*]/g, function(c){
+      return "%" + c.charCodeAt(0).toString(16).toUpperCase();
+    });
+  }
+
+  function gs1DigitalLink(item, resolver){
+    var path = "/01/" + item.gtin;
+    if(item.batch) path += "/10/" + gs1Pct(item.batch);
+    if(item.serial) path += "/21/" + gs1Pct(item.serial);
+    var q = item.dates.map(function(d){ return d[0] + "=" + d[1]; }).join("&");
+    return gs1Resolver(resolver) + path + (q ? "?" + q : "");
+  }
+
+  // 人可读的元素串；定长 AI（01、日期）在前，变长 AI（10、21）在后，少用一个 FNC1
+  function gs1ElementString(item){
+    var s = "(01)" + item.gtin;
+    item.dates.forEach(function(d){ s += "(" + d[0] + ")" + d[1]; });
+    if(item.batch) s += "(10)" + item.batch;
+    if(item.serial) s += "(21)" + item.serial;
+    return s;
+  }
+
+  // GS1 DataMatrix：首码字 FNC1(232) 表明是 GS1 数据；变长字段后面还有字段时，再用 FNC1 分隔
+  function gs1DataMatrix(item){
+    var cw = [232], s = "01" + item.gtin, vars = [];
+    item.dates.forEach(function(d){ s += d[0] + d[1]; });
+    if(item.batch) vars.push("10" + item.batch);
+    if(item.serial) vars.push("21" + item.serial);
+    vars.forEach(function(v, i){
+      s += v;
+      if(i < vars.length - 1){ cw = cw.concat(dmEncode(s)); cw.push(232); s = ""; }
+    });
+    return dmSymbol(cw.concat(dmEncode(s)));
+  }
+  function gs1DataMatrixURL(item, quiet){
+    var dm = gs1DataMatrix(item);
+    return dm ? dmURL(dm, quiet) : null;
+  }
+
   return {
+    gs1Build: gs1Build,
+    gs1CheckDigit: gs1CheckDigit,
+    gs1Date: gs1Date,
+    gs1DigitalLink: gs1DigitalLink,
+    gs1ElementString: gs1ElementString,
+    gs1DataMatrix: gs1DataMatrix,
+    gs1DataMatrixURL: gs1DataMatrixURL,
     code128Modules: code128Modules,
     code128Values: code128Values,
     code128URL: code128URL,
@@ -3641,6 +3789,7 @@ var QRPCodes = (function(){
 
   var cols = [];        // [{name, isDesc, isEnum, isNum, values[]}] 除 Key 外的全部列
   var keyCol = null;    // Key 列自身的统计
+  var keyHeader = "";   // Key 列的表头原文（GS1 自动识别 GTIN 列时用）
   var rawRows = [];     // [{item, v:{列名:值}}]  聚合后的组还会多一个 sum
   var truncated = false;
   var keyFallback = false;
@@ -3715,6 +3864,7 @@ var QRPCodes = (function(){
                   (truncated || keyFallback) ? "warn" : "ok");
         chipsExpanded = false;
         buildFieldBox();
+        buildGS1Map();
         buildFilterUI();
         updateCharTip();
         closeDrawer();
@@ -3776,7 +3926,7 @@ var QRPCodes = (function(){
   }
 
   function parseWorkbook(wb){
-    cols = []; rawRows = [];
+    cols = []; rawRows = []; keyHeader = "";
     var seen = dict(), stats = dict(), keyStat = newStat();
     truncated = false; keyFallback = false;
     var budget = MAXCELLS;                    // 所有 sheet 共用的展开预算
@@ -3794,6 +3944,7 @@ var QRPCodes = (function(){
       var info = locateHeader(aoa); if(!info) return;
       if(info.fallback) keyFallback = true;
       var cm = info.colMap, hdr = aoa[info.headerRow] || [];
+      if(keyHeader === "") keyHeader = clip(String(hdr[cm.item] == null ? "" : hdr[cm.item]).trim());
 
       var idxList = [];                       // [[列号, 列名]]
       for(var c=0;c<hdr.length;c++){
@@ -4171,6 +4322,79 @@ var QRPCodes = (function(){
 
   /* ----------------------------------------------------------- 码图生成 */
   var symCache = dict(), symCacheN = 0;
+  /* ------------------------------------------------------------- GS1 */
+  // 按表头自动对应 GS1 字段（与 ALIAS 一样先 norm 再比对）；对不上的可在面板里手动选
+  var GS1_ALIAS = {
+    gtin       : ["gtin","gtin13","gtin14","ean","ean13","upc","codebars","商品条码","国际条码","条码","条形码","商品编码"],
+    batch      : ["batch","lot","batchno","lotno","batchnumber","lotnumber","distnumber","批号","批次","批次号","生产批号"],
+    expiry     : ["expiry","expirydate","expdate","exp","useby","有效期","有效期至","失效日期","到期日","过期日期"],
+    best_before: ["bestbefore","bestbeforedate","bbd","最佳食用日期","最佳食用期","赏味期限"],
+    prod_date  : ["proddate","productiondate","mnfdate","mfgdate","manufacturedate","生产日期","制造日期"],
+    serial     : ["serial","serialno","serialnumber","序列号"]
+  };
+  function gs1Selects(){ return document.querySelectorAll("#gs1opts select[data-gs1]"); }
+  function isGS1(){ return radio("sym") === "gs1"; }
+
+  // 每个下拉框：（不用）/ Key / 各列；按表头别名预选。GTIN 对不上表头时，Key 若全是 8–14 位数字也预选 Key
+  function buildGS1Map(){
+    var keyLooksGtin = rawRows.length > 0 && rawRows.slice(0, 50).every(function(r){
+      return /^(\d{8}|\d{12,14})$/.test(r.item);
+    });
+    Array.prototype.forEach.call(gs1Selects(), function(sel){
+      var field = sel.getAttribute("data-gs1"), names = GS1_ALIAS[field] || [], pick = "";
+      sel.textContent = "";
+      function add(value, label){
+        var o = document.createElement("option"); o.value = value; o.textContent = label; sel.appendChild(o);
+      }
+      add("", "（不用）");
+      add("__key__", "Key" + (keyHeader ? "（" + keyHeader + "）" : ""));
+      if(names.indexOf(norm(keyHeader)) >= 0) pick = "__key__";
+      cols.forEach(function(o){
+        add(o.name, o.name);
+        if(!pick && names.indexOf(norm(o.name)) >= 0) pick = o.name;
+      });
+      if(!pick && field === "gtin" && keyLooksGtin) pick = "__key__";
+      sel.value = pick;
+    });
+  }
+
+  // 一行数据 → gs1Build() 需要的字段
+  function gs1Fields(r){
+    var f = {};
+    Array.prototype.forEach.call(gs1Selects(), function(sel){
+      var v = sel.value;
+      if(v === "") return;
+      f[sel.getAttribute("data-gs1")] = (v === "__key__") ? r.item : (r.v[v] || "");
+    });
+    return f;
+  }
+
+  // 生成 GS1 码；数据有误时返回 {err}，标签上会印出原因。hri 是印在码下方的人可读元素串
+  function gs1Symbol(r, qrCell){
+    var item, dm = radio("gs1sym") === "dm", content;
+    try{
+      item = QRPCodes.gs1Build(gs1Fields(r));
+      content = dm ? QRPCodes.gs1ElementString(item) : QRPCodes.gs1DigitalLink(item, $("gs1dom").value);
+    }catch(err){ return { err: err.message }; }
+    var key = (dm ? "gs1dm" : "gs1qr") + "|" + qrCell + "|" + content;
+    if(symCache[key]) return symCache[key];
+    if(symCacheN >= MAXCACHE){ symCache = dict(); symCacheN = 0; }
+    var res;
+    try{
+      if(dm){
+        var d = QRPCodes.gs1DataMatrixURL(item, 2);
+        res = d ? { url:d, vec:true } : { err:"GS1 数据超出 DataMatrix 容量" };
+      }else{
+        var qr = qrcode(QR_TYPE, QR_EC);
+        qr.addData(content); qr.make();
+        res = { url:qr.createDataURL(qrCell, 2), vec:false };
+      }
+    }catch(err){ res = { err:"无法生成码图" }; }
+    res.hri = QRPCodes.gs1ElementString(item);
+    symCacheN++;
+    return (symCache[key] = res);
+  }
+
   function symbol(text, qrCell){
     var kind = radio("sym");
     var key = kind + "|" + qrCell + "|" + text;
@@ -4256,6 +4480,26 @@ var QRPCodes = (function(){
   // Code 128 是变长的：同一个框里 Key 越长条越细，细过阈值就扫不动，这里给出预警
   function symWarn(items, symW){
     var tip = $("symTip");
+    if(isGS1()){
+      if(!$("gs1_gtin").value){
+        tip.textContent = "GS1：请在下方选择 GTIN 所在的列。";
+        tip.className = "hint err"; return;
+      }
+      var bad = 0, first = "";
+      items.forEach(function(r){
+        try{ QRPCodes.gs1Build(gs1Fields(r)); }
+        catch(err){ bad++; if(!first) first = err.message; }
+      });
+      tip.textContent = radio("gs1sym") === "dm"
+        ? "GS1 DataMatrix：GS1 元素串（FNC1），医药、生鲜追溯常用。"
+        : "GS1 Digital Link 二维码：零售 POS 和手机都能扫（GS1 Sunrise 2027）。";
+      tip.className = "hint";
+      if(bad){
+        tip.textContent += " 有 " + bad + " 行数据不合规，标签上会印出原因（例如：" + first + "）。";
+        tip.className = "hint err";
+      }
+      return;
+    }
     if(radio("sym") !== "c128"){
       tip.textContent = radio("sym") === "dm"
         ? "DataMatrix：方形，比二维码更省地方，适合小标签。仅支持 Latin-1 字符。"
@@ -4463,7 +4707,8 @@ var QRPCodes = (function(){
 
   function makeCell(r, qrCell){
     var d = document.createElement("div"); d.className = "cell";
-    var sym = symbol(r.item, qrCell);        // 码图内容 = Key
+    var sym = isGS1() ? gs1Symbol(r, qrCell)  // 码图内容 = 所选列拼成的 GS1 数据
+                      : symbol(r.item, qrCell);    // 码图内容 = Key
     if(sym.url){
       var img = document.createElement("img");
       img.src = sym.url;
@@ -4481,6 +4726,10 @@ var QRPCodes = (function(){
     var t = document.createElement("div"); t.className = "txt";
     var t1 = document.createElement("div"); t1.className = "t1"; t1.textContent = r.item;
     t.appendChild(t1);
+    if(sym.hri){                              // GS1 人可读文字，如 (01)…(17)…(10)…
+      var th = document.createElement("div"); th.className = "t3"; th.textContent = sym.hri;
+      t.appendChild(th);
+    }
 
     if(sel.length){
       var first = cutText(String(valOf(r, sel[0])));
@@ -4667,7 +4916,12 @@ var QRPCodes = (function(){
     updateCharTip();
     render();
   });
-  ["qrscale","fscale","kwmode","sym"].forEach(function(name){
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="sym"]'), function(el){
+    el.addEventListener("change", function(){ $("gs1opts").classList.toggle("hide", !isGS1()); });
+  });
+  Array.prototype.forEach.call(gs1Selects(), function(el){ el.addEventListener("change", render); });
+  $("gs1dom").addEventListener("input", debounce(render, 400));
+  ["qrscale","fscale","kwmode","sym","gs1sym"].forEach(function(name){
     Array.prototype.forEach.call(document.querySelectorAll('input[name="'+name+'"]'), function(el){
       el.addEventListener("change", render);
     });
