@@ -1,0 +1,26 @@
+# Dependabot：保持 CI 里的 GitHub Actions 与解码器依赖为最新。页面本身的依赖
+# （SheetJS、qrcode.js）内联在 index.html 里，Dependabot 看不到，需要手动更新。
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    # 只采用发布满 14 天的版本，降低新版本被投毒的风险
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci(deps)"
+
+  # 交叉验证用的 zxing-cpp / Pillow（test/crosscheck/requirements.txt，带哈希）
+  - package-ecosystem: "pip"
+    directory: "/test/crosscheck"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "test(deps)"
