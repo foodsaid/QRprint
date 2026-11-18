@@ -29,6 +29,15 @@
 
 其余功能都在左边那四步里：按仓库/库存等任意列筛选、粘一串编号只打这些、重复行自动合并（可选把数量加起来）、A4 一页多枚带裁切线、换成 DataMatrix 或一维条形码给老扫描枪用。
 
+## GS1 标签（零售 / 追溯用的 2D 码）
+
+第 3 步「码制」选 **GS1**，再选好 GTIN（必填）、批号、有效期等各在哪一列——表头叫「商品条码」「批号」「有效期」这类名字会自动选好。可以打两种：
+
+- **Digital Link 二维码**：零售收银台和手机都能扫，面向 GS1 Sunrise 2027
+- **GS1 DataMatrix**：医药、生鲜追溯常用
+
+GTIN 校验位、批号字符、日期都会检查，有问题的行直接在标签上写明原因。日期写成 Excel 日期、`2027-12-31` 或 `271231` 都行。
+
 ## 数据安全
 
 表格只在你自己的浏览器里处理。页面用 CSP 从浏览器层面禁掉了一切网络请求——整个文件里搜不到 `fetch`、`XMLHttpRequest`，也没有 CDN、字体、统计、埋点。**下载下来断网打开，一样能用**，这是最踏实的验证方式。
@@ -84,9 +93,10 @@
 
 ```bash
 node test/codes.test.mjs
+node test/gs1.test.mjs
 ```
 
-609 项断言，直接从 `index.html` 里抠代码来跑，所以仓库不存第二份源码、也不需要构建。覆盖 Code 128 的图案表不变量与编解码往返、DataMatrix 的 RS 校验子归零（52×52 按交错块分别校验） / 全尺寸放置双射性 / 位图往返、以及输出 SVG 无外部引用。
+609 项断言，直接从 `index.html` 里抠代码来跑，所以仓库不存第二份源码、也不需要构建。覆盖 Code 128 的图案表不变量与编解码往返、DataMatrix 的 RS 校验子归零（52×52 按交错块分别校验） / 全尺寸放置双射性 / 位图往返、以及输出 SVG 无外部引用。`gs1.test.mjs` 跑的是姊妹项目 [qrbarcode](https://github.com/foodsaid/qrbarcode) 的同一份 GS1 测试向量（`test/gs1_vectors.json`，CI 会核对与上游逐字节相同），保证两边生成的 Digital Link 和元素串完全一致；GS1 DataMatrix 以 FNC1 开头、变长字段之间用 FNC1 分隔，交叉解码要求 zxing-cpp 识别为 `]d2`。
 
 **真实解码器交叉验证**：CI 里把页面实际生成的二维码、Code 128、DataMatrix 导出成模块矩阵，交给与本项目毫无共同代码的 [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) 解码，逐个核对内容、码制和纠错等级（`test/crosscheck/`）。本地运行：
 

@@ -73,4 +73,23 @@ for (const text of TEXTS.dm) {
   symbols.push({ kind: 'dm', text, rows: dm ? rows : null });
 }
 
+// GS1：共享测试向量里的合法输入，外加读 xlsx 时常见的 Excel 日期序列号与"批号+序列号"组合
+const vectors = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'gs1_vectors.json'), 'utf8'));
+const gs1Inputs = vectors.valid.map((v) => v.input).concat([
+  { gtin: '9506000134352', batch: 'L2026-11', serial: 'SN000123', expiry: '46387', prod_date: '2026/11/18' },
+  { gtin: '96385074', batch: 'A(1)', best_before: '2027.03.31' },
+]);
+for (const input of gs1Inputs) {
+  const item = C.gs1Build(input);
+  const uri = C.gs1DigitalLink(item, input.domain);
+  const qr = qrcode(QR_TYPE, QR_EC);
+  qr.addData(uri); qr.make();
+  const n = qr.getModuleCount(), rows = [];
+  for (let r = 0; r < n; r++) { let row = ''; for (let c = 0; c < n; c++) row += qr.isDark(r, c) ? '1' : '0'; rows.push(row); }
+  symbols.push({ kind: 'gs1qr', text: uri, ec: QR_EC, rows });
+  const dm = C.gs1DataMatrix(item), drows = [];
+  for (let r = 0; r < dm.size; r++) drows.push(dm.bits.slice(r * dm.size, (r + 1) * dm.size).join(''));
+  symbols.push({ kind: 'gs1dm', text: C.gs1ElementString(item), rows: drows });
+}
+
 process.stdout.write(JSON.stringify({ qr: { type: QR_TYPE, ec: QR_EC, encoding: QR_ENCODING }, symbols }, null, 1) + '\n');

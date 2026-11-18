@@ -26,6 +26,15 @@ jobs:
         node-version: '22'
     - name: Code 128 / DataMatrix 自测
       run: node test/codes.test.mjs
+    - name: GS1 测试（与 qrbarcode 共用测试向量）
+      run: node test/gs1.test.mjs
+    # 本地那份向量必须与 qrbarcode 在记录的提交上的那份逐字节相同
+    - name: 核对 GS1 测试向量与上游一致
+      run: |
+        src=$(sed -n "s/^  commit: '\([0-9a-f]\{40\}\)',$/\1/p" test/gs1.test.mjs)
+        test -n "$src"
+        curl -fsSL "https://raw.githubusercontent.com/foodsaid/qrbarcode/${src}/tests/gs1_vectors.json" -o upstream.json
+        cmp upstream.json test/gs1_vectors.json
 
   crosscheck:
     name: zxing-cpp 交叉解码

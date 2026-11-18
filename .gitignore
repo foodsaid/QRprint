@@ -1,0 +1,6 @@
+# Python 缓存（运行 test/crosscheck/decode.py 时生成）
+__pycache__/
+*.pyc
+# 交叉验证与 CI 运行时生成的临时文件
+symbols.json
+upstream.json

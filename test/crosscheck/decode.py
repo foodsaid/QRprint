@@ -20,6 +20,8 @@ FORMATS = {
     "qr": zxingcpp.BarcodeFormat.QRCode,
     "c128": zxingcpp.BarcodeFormat.Code128,
     "dm": zxingcpp.BarcodeFormat.DataMatrix,
+    "gs1qr": zxingcpp.BarcodeFormat.QRCode,
+    "gs1dm": zxingcpp.BarcodeFormat.DataMatrix,
 }
 SCALE = 4  # 每个模块的像素数
 QUIET = 4  # 二维码静区（模块）；Code 128 的 10 模块静区已含在 bars 里
@@ -54,7 +56,7 @@ def check(symbol):
     data = symbol.get("rows") if kind != "c128" else symbol.get("bars")
     if data is None:
         return "QRprint 拒绝生成（返回 null）"
-    image = bars_image(data) if kind == "c128" else matrix_image(data, QUIET if kind == "qr" else 2)
+    image = bars_image(data) if kind == "c128" else matrix_image(data, QUIET if kind.endswith("qr") else 2)
     result = zxingcpp.read_barcode(image, formats=FORMATS[kind])
     if result is None or not result.valid:
         return "zxing-cpp 无法解码"
@@ -62,7 +64,9 @@ def check(symbol):
         return f"码制不对：{result.format}"
     if result.text != text:
         return f"内容不一致：解码得到 {result.text!r}"
-    if kind == "qr" and result.ec_level != symbol["ec"]:
+    if kind == "gs1dm" and result.symbology_identifier != "]d2":
+        return f"不是 GS1 DataMatrix（符号标识 {result.symbology_identifier}，应为 ]d2）"
+    if kind.endswith("qr") and result.ec_level != symbol["ec"]:
         return f"纠错等级不对：{result.ec_level}"
     return None
 
